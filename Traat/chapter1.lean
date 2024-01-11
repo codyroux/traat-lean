@@ -70,7 +70,7 @@ theorem exists_iff : ∀ T (P Q : T -> Prop),
         ∃ t, Q t :=
 by
   intros T P Q equiv ex_t
-  match ex_t with 
+  match ex_t with
    | Exists.intro w h =>
      exists w
      simp [equiv]
@@ -173,7 +173,7 @@ by
   (by
     apply (dependent_choice''  (λ a ↦ ¬ P a))
     . exact h
-    . intros a npa 
+    . intros a npa
       apply Classical.byContradiction
       simp; intros p
       apply npa
@@ -189,7 +189,7 @@ by
       . exact P0
       . intros n
         apply (P1 n).2
-  
+
 
 
 lemma normalizing_ind : ∀ P : A -> Prop,
@@ -201,93 +201,92 @@ by
   . apply norm
 
 
--- -- Should be easy!
--- lemma red_ref_trans_clos : ∀ x y z, x ~> y -> refl_trans_clos R y z -> refl_trans_clos R x z :=
--- begin
---   intros x y z,
---   intros red_x_y,
---   intros h,
---   induction h,
---     simp [refl_trans_clos],
---     constructor,
---     constructor,
---     exact red_x_y,
---   simp [refl_trans_clos],
---   apply refl_clos.base,
---   apply trans_clos.step,
---     exact red_x_y,
---   exact h_a_1
--- end
+-- Should be easy!
+lemma red_ref_trans_clos : ∀ x y z, x ~> y -> refl_trans_clos R y z -> refl_trans_clos R x z :=
+by
+  intros x y z red_x_y h
+  induction h
+  . apply refl_clos.base _ _
+    apply trans_clos.base _ _
+    trivial
+  . apply refl_clos.base
+    apply trans_clos.step
+    . trivial
+    . trivial
 
--- lemma normalizing_normal (x : A) : normalizes R x -> ∃ y : A, x ~>* y ∧ normal R y
--- :=
--- begin
---   apply normalizes_ind,
---   intros x h,
---   destruct (_ : decidable (∃ y, x ~> y)),
---     intros h' _,
---     existsi x,
---     split,
---     constructor,
---     exact h',
---   intros h' _,
---   destruct h',
---   simp, intros y red_x_y,
---   destruct (h y red_x_y),
---   simp,
---   intros y' h'',
---   existsi y',
---   split,
---     destruct h'',
---   intros h''' _,
---     apply red_ref_trans_clos,
---     exact red_x_y,
---     exact h''',
---   destruct h'',
---   intros _ i, exact i,
---   apply classical.prop_decidable
--- end
+#check Classical.em
 
--- -- FIXME: define a notation
--- def joins : ∀ (x y : A), Prop := λ x y, ∃ z : A, x ~>* z ∧ y ~>* z
+lemma normalizing_normal (x : A) : normalizes R x -> ∃ y : A, x ~>* y ∧ normal R y
+:=
+by
+  apply normalizes_ind
+  intros x h
+  match em (∃ y, x ~> y) with
+    | .inl h' =>
+      match h' with
+      | ⟨ y, h'⟩ =>
+        match h _ h' with
+        | ⟨ z, h''⟩ =>
+          exists z
+          apply And.intro
+            (by
+              match h''.1 with
+              | .refl _ => sorry
+              | .base _ _ (.base _ _ _) => sorry
+              | .base _ _ (.step _ _ _ _ _) =>
+                sorry
+            )
+            (by apply h''.2)
+    | .inr h' =>
+      exists x
+      apply And.intro
+        (
+          by
+            apply refl_clos.refl _)
+        (
+          by
+            trivial
+        )
 
--- -- FIXME: define a notation
--- def wedge : ∀ (u t v : A), Prop := λ u t v, t ~>* u ∧ t ~>* v
+-- FIXME: define a notation
+def joins : ∀ (x y : A), Prop := λ x y ↦ ∃ z : A, x ~>* z ∧ y ~>* z
 
--- def church_rosser := ∀ (x y : A), x <~>* y -> joins R x y
+-- FIXME: define a notation
+def wedge : ∀ (u t v : A), Prop := λ u t v ↦ t ~>* u ∧ t ~>* v
 
--- def confluent := ∀ (x y z : A), wedge R y x z -> joins R y z
+def church_rosser := ∀ (x y : A), x <~>* y -> joins R x y
 
--- def strongly_confluent :=
---   ∀ x y z : A, x ~> y -> x ~> z -> ∃ w, y ~> w ∧ z ~> w
+def confluent := ∀ (x y z : A), wedge R y x z -> joins R y z
 
--- def weakly_confluent :=
---   ∀ x y z : A, x ~> y -> x ~> z -> ∃ w, y ~>* w ∧ z ~>* w
+ def strongly_confluent :=
+  ∀ x y z : A, x ~> y -> x ~> z -> ∃ w, y ~> w ∧ z ~> w
 
--- -- let's relate all of these
+def weakly_confluent :=
+  ∀ x y z : A, x ~> y -> x ~> z -> ∃ w, y ~>* w ∧ z ~>* w
 
--- -- this one is trivial
--- lemma church_rosser_implies_confluent : church_rosser R -> confluent R :=
---   sorry
+-- let's relate all of these
 
--- lemma strongly_confluent_implies_confluent : strongly_confluent R -> confluent R :=
---   sorry
+-- this one is trivial
+lemma church_rosser_implies_confluent : church_rosser R -> confluent R :=
+  sorry
 
--- -- also trivial
--- lemma confluent_implies_weakly_confluent : confluent R -> weakly_confluent R :=
---   sorry
+lemma strongly_confluent_implies_confluent : strongly_confluent R -> confluent R :=
+  sorry
 
--- -- this one is a little more work
--- lemma confluent_implies_church_rosser : confluent R -> church_rosser R :=
---   sorry
+-- also trivial
+lemma confluent_implies_weakly_confluent : confluent R -> weakly_confluent R :=
+  sorry
 
--- -- Uh oh!
--- lemma weakly_confluent_does_not_imply_confluent : ∃ A (R : A -> A -> Prop),
---  weakly_confluent R ∧ ¬ confluent R :=
---  sorry
+-- this one is a little more work
+lemma confluent_implies_church_rosser : confluent R -> church_rosser R :=
+  sorry
 
--- -- but if...
--- lemma newmanns_lemma : normalizing R -> weakly_confluent R -> confluent R :=
---   -- Requires a clever induction on diagrams
---   sorry
+-- Uh oh!
+lemma weakly_confluent_does_not_imply_confluent : ∃ (A : Type) (R : A -> A -> Prop),
+weakly_confluent R ∧ ¬ confluent R :=
+sorry
 
+-- but if...
+lemma newmanns_lemma : normalizing R -> weakly_confluent R -> confluent R :=
+  -- Requires a clever induction on diagrams
+sorry
