@@ -85,7 +85,7 @@ lemma refl_clos_monotone : ∀ (R R' : A → A → Prop),
     . apply refl_clos.base
       apply le; trivial
 
-lemma is_trans_trans_clos : ∀ (R : A → A → Prop) x y z,
+lemma trans_clos_transitive : ∀ (R : A → A → Prop) x y z,
   trans_clos R x y → trans_clos R y z → trans_clos R x z :=
   by
     intros R x y z tr_x_y
@@ -94,6 +94,16 @@ lemma is_trans_trans_clos : ∀ (R : A → A → Prop) x y z,
       apply trans_clos.step <;> trivial
     . intros rest
       apply trans_clos.step; trivial
+      apply ih; trivial
+
+lemma refl_trans_clos_transitive : ∀ (R : A → A → Prop) x y z,
+  refl_trans_clos R x y → refl_trans_clos R y z → refl_trans_clos R x z :=
+  by
+    intros R x y z tr_x_y
+    induction' tr_x_y with _ _ _ _ _ _ ih
+    . intros rest; trivial
+    . intros rest
+      apply refl_trans_clos.step; trivial
       apply ih; trivial
 
 
@@ -180,6 +190,14 @@ by
     rw [←zero_case]
     apply incr_case
 
+
+lemma normal_red : ∀ x y, normal R x → x ~>* y → x = y :=
+by
+  intros x y norm red
+  cases red; trivial
+  case step y _ _ =>
+  by_contra
+  apply norm; exists y
 
 #check forall_and
 
@@ -490,9 +508,35 @@ by
   . trivial
   . trivial
 
--- this one is a little more work
+-- this one is a little more work.
+-- again, something clear from a diagram requires a tedious mechanical proof
 lemma confluent_implies_church_rosser : confluent R → church_rosser R :=
-  sorry
+by
+  intros confl
+  unfold church_rosser
+  intros x y red_x_y
+  induction red_x_y
+  case refl x =>
+    exists x ; repeat constructor
+  case base x y red_x_y =>
+    exists y; constructor
+    . apply refl_trans_clos.step; trivial; constructor
+    . constructor
+  case trans x y z red_x_y red_y_z joins_x_y joins_y_z =>
+    cases' joins_x_y with w1 h1
+    cases' h1 with h11 h12
+    cases' joins_y_z with w2 h2
+    cases' h2 with h21 h22
+    have h' : wedge R w1 w2 := by
+      exists y
+    have h := confl w1 w2 h'
+    cases' h with w h''
+    exists w; cases' h'' with h3 h4
+    constructor <;> apply refl_trans_clos_transitive <;> trivial
+  case inv _ h =>
+    cases' h with w h'
+    cases' h' with h1 h2
+    exists w
 
 -- Weakly confluent does not imply confluent in general!
 inductive X := | a | b | c | d
@@ -509,8 +553,20 @@ by
   intros h
   cases' h with w h
   cases' h with h1 h2
-  have eq_a : w = X.a := sorry
-  have eq_d : w = X.d := sorry
+  have eq_a : X.a = w := by
+    apply normal_red RX
+    . intros h
+      cases' h with w h
+      -- inversion h?
+      sorry
+    . apply h1
+  have eq_d : X.d = w := by
+    apply normal_red RX
+    . intros h
+      cases' h with w h
+      -- inversion h
+      sorry
+    . apply h2
   congr -- this doesn't work!?
   sorry
 
@@ -520,7 +576,7 @@ by
   exists X, RX
   constructor
   . intros x y z r_x_y r_x_z
-    sorry -- tedious
+    sorry -- tedious; needs cases on every possible "peak"!
   . intros h
     apply not_joins_a_d
     apply h
