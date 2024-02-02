@@ -421,7 +421,7 @@ def church_rosser := ∀ (x y : A), x <~>* y → x ~>*.*<~ y
 
 def confluent := ∀ (y z : A), y *<~.~>* z → y ~>*.*<~ z
 
-def strongly_confluent :=
+def diamond :=
   ∀ x y z : A, x ~> y → x ~> z → ∃ w, y ~> w ∧ z ~> w
 
 def weakly_confluent :=
@@ -523,7 +523,7 @@ by
 --                      \ /
 --                       ?
 -- The formal proof is more subtle and uses the previous lemma.
-theorem strongly_confluent_implies_confluent : strongly_confluent R → confluent R :=
+theorem diamond_implies_confluent : diamond R → confluent R :=
 by
   intros sc
   apply semi_confluent_implies_confluent
@@ -777,3 +777,15 @@ by
       . apply refl_trans_clos_transitive
         . apply h2.2
         . apply h3.2
+
+lemma confluent_unique_nf : confluent R →
+  ∀ x y z, x ~>* y → x ~>*z → normal R y → normal R z → y = z :=
+by
+  intros conf x y z red_x_y red_x_z norm_y norm_z
+  have wdg_y_z : wedge _ y z := Exists.intro x ⟨ red_x_y, red_x_z ⟩
+  have h : y ~>*.*<~ z := conf _ _ wdg_y_z
+  cases' h with w h
+  cases h
+  have eq_y_w : y = w := by apply normal_red <;> trivial
+  have eq_z_w : z = w := by  apply normal_red <;> trivial
+  simp [*]
