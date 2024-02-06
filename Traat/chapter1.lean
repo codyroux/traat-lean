@@ -789,3 +789,78 @@ by
   have eq_y_w : y = w := by apply normal_red <;> trivial
   have eq_z_w : z = w := by  apply normal_red <;> trivial
   simp [*]
+
+variable (S : A → A → Prop)
+
+infix:50 " ++> " => S
+infix:60 " ++>* " => refl_trans_clos S
+
+lemma inc_refl_trans_eq : (. ~> .) ⊆ (. ++> .) → (. ++> .) ⊆ (. ~>* .) → (. ++>* .) ≅ (. ~>* .) :=
+by
+  simp
+  intros r_sub_s s_sub_r_star x y; constructor <;> intros steps
+  . induction steps
+    . constructor
+    . apply refl_trans_clos_transitive
+      . apply s_sub_r_star; trivial
+      . trivial
+  . induction steps
+    . constructor
+    . apply refl_trans_clos.step
+      . apply r_sub_s; trivial
+      . trivial
+
+lemma equiv_conf : S ≅ R → confluent S → confluent R :=
+by
+  simp
+  intros equiv
+  simp [confluent, wedge, joins]
+  sorry
+
+lemma trans_clos_idempotent : ∀ R, refl_trans_clos (refl_trans_clos R) ≅ refl_trans_clos R :=
+by
+  simp; intros R x y
+  constructor <;> intros steps <;> induction' steps with z a b c red_a_c _red_b_c ih
+  . constructor
+  . apply refl_trans_clos_transitive <;> trivial
+  . constructor
+  . apply refl_trans_clos.step
+    . apply refl_trans_clos.step; trivial
+      constructor
+    . trivial
+
+lemma conf_trans_clos : confluent (refl_trans_clos R) ↔ confluent R :=
+by
+  simp [confluent, joins, wedge]; constructor
+  . intros h y z x red_x_y red_x_z
+    have h1 : refl_trans_clos (refl_trans_clos R) x y :=
+      by
+        apply (trans_clos_idempotent _ _ _).2; trivial
+    have h2 : refl_trans_clos (refl_trans_clos R) x z :=
+      by
+        apply (trans_clos_idempotent _ _ _).2; trivial
+    cases' (h _ _ _ h1 h2) with w h
+    cases' h with h1 h2
+    exists w; constructor <;> apply (trans_clos_idempotent _ _ _).1 <;> trivial
+  . intros h y z x red_x_y red_x_z
+    have h1 : refl_trans_clos R x y :=
+      by
+        apply (trans_clos_idempotent _ _ _).1; trivial
+    have h2 : refl_trans_clos R x z :=
+      by
+        apply (trans_clos_idempotent _ _ _).1; trivial
+    cases' (h _ _ _ h1 h2) with w h
+    cases' h with h1 h2
+    exists w; constructor <;> apply (trans_clos_idempotent _ _ _).2 <;> trivial
+
+lemma inc_refl_trans_confl : (. ~> .) ⊆ (. ++> .) → (. ++> .) ⊆ (. ~>* .) → confluent S → confluent R :=
+by
+  simp
+  intros
+  apply (conf_trans_clos _).1
+  apply equiv_conf
+  . apply inc_refl_trans_eq; simp
+    . trivial
+    . simp; trivial
+  . simp
+    apply (conf_trans_clos _).2; trivial
