@@ -5,8 +5,6 @@ section variable {A : Type}
 
 section variable (R : A → A → Prop)
 
-#check R
-
 section variable [inhabited_A : Nonempty A]
 
 -- These are a little ad-hoc but they'll serve
@@ -250,7 +248,6 @@ by
   by_contra
   apply norm; exists y
 
-#check forall_and
 
 -- I'm convinced this is somewhere in the standard library
 theorem exists_iff : ∀ T (P Q : T → Prop),
@@ -264,9 +261,6 @@ by
      exists w
      simp [equiv]
      exact h
-
-
-#print Classical.axiomOfChoice
 
 theorem iterate_left : ∀ {A} (f : A → A) (n : ℕ) (x : A), f^[n+1] x = f (f^[n] x) :=
 by
@@ -298,9 +292,6 @@ by
          apply h
 
 
-#print Nonempty
-#print Inhabited
-
 -- So tedious!
 lemma dependent_choice : ∀ {A}
   (Q : A → A → Prop),
@@ -315,9 +306,6 @@ by
   | Exists.intro f h' =>
     exists f
     apply h'.2
-
-#print Subtype
-#print Exists
 
 lemma dependent_choice'' : ∀ (P : A → Prop)
   (Q : A → A → Prop) (a : A),
@@ -406,9 +394,6 @@ lemma red_ref_trans_clos : ∀ x y z, x ~> y → refl_trans_clos R y z → refl_
 by
   intros x y z red_x_y h
   apply refl_trans_clos.step _ _ <;> trivial
-
-
-#check Classical.em
 
 lemma normalizing_normal : normalizes R x → ∃ y : A, x ~>* y ∧ normal R y
 :=
