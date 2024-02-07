@@ -838,7 +838,15 @@ by
   intros equiv
   simp [confluent, wedge, joins]
   intros h y z x red_x_y red_y_z
-  cases' (h y z x _ _) with w h
+  have h1 : refl_trans_clos S x y := by
+    apply refl_trans_clos_monotone
+    intros _ _; apply (equiv _ _).2
+    trivial
+  have h2 : refl_trans_clos S x z := by
+    apply refl_trans_clos_monotone
+    intros _ _; apply (equiv _ _).2
+    trivial
+  cases' (h y z x h1 h2) with w h
   cases' h with h1 h2
   exists w
   constructor <;> apply refl_trans_clos_monotone
