@@ -65,7 +65,7 @@ by
   apply (h _ _).2; trivial
 
 
-
+@[simp]
 lemma trans_clos_monotone : R ⊆ R' →  trans_clos R ⊆ trans_clos R' :=
   by
     intros le x y tr
@@ -77,29 +77,28 @@ lemma trans_clos_monotone : R ⊆ R' →  trans_clos R ⊆ trans_clos R' :=
         trivial
       . trivial
 
-lemma sym_clos_monotone : ∀ (R R' : A → A → Prop),
- R ⊆ R' →  sym_clos R ⊆ sym_clos R' :=
+@[simp]
+lemma sym_clos_monotone : R ⊆ R' →  sym_clos R ⊆ sym_clos R' :=
    by
-    intros R R' le x y sym
+    intros le x y sym
     induction sym
     . constructor; apply le; trivial
     . apply sym_clos.inv
       apply le; trivial
 
-lemma refl_clos_monotone : ∀ (R R' : A → A → Prop),
- R ⊆ R' →  refl_clos R ⊆ refl_clos R' :=
+@[simp]
+lemma refl_clos_monotone : R ⊆ R' →  refl_clos R ⊆ refl_clos R' :=
   by
-    intros R R' le x y refl
+    intros le x y refl
     induction refl
     . constructor
     . apply refl_clos.base
       apply le; trivial
 
 
-lemma trans_clos_transitive : ∀ (R : A → A → Prop) x y z,
-  trans_clos R x y → trans_clos R y z → trans_clos R x z :=
+lemma trans_clos_transitive : trans_clos R x y → trans_clos R y z → trans_clos R x z :=
   by
-    intros R x y z tr_x_y
+    intros tr_x_y
     induction' tr_x_y with _ _ _ _ _ _ _ _ ih
     . intros rest
       apply trans_clos.step <;> trivial
@@ -107,10 +106,9 @@ lemma trans_clos_transitive : ∀ (R : A → A → Prop) x y z,
       apply trans_clos.step; trivial
       apply ih; trivial
 
-lemma refl_trans_clos_transitive : ∀ (R : A → A → Prop) x y z,
-  refl_trans_clos R x y → refl_trans_clos R y z → refl_trans_clos R x z :=
+lemma refl_trans_clos_transitive : refl_trans_clos R x y → refl_trans_clos R y z → refl_trans_clos R x z :=
   by
-    intros R x y z tr_x_y
+    intros tr_x_y
     induction' tr_x_y with _ _ _ _ _ _ ih
     . intros rest; trivial
     . intros rest
@@ -141,6 +139,7 @@ lemma refl_trans_is_trans_refl :
         . apply trans_clos.step <;> trivial
 
 
+@[simp]
 lemma refl_sym_is_sym_refl :
   refl_clos (sym_clos R) ≅ sym_clos (refl_clos R)
   :=
@@ -160,12 +159,10 @@ lemma refl_sym_is_sym_refl :
         . constructor
         . apply refl_clos.base; apply sym_clos.inv; trivial
 
-
-
-lemma refl_trans_clos_monotone : ∀ (R R' : A → A → Prop),
- R ⊆ R' →  refl_trans_clos R ⊆ refl_trans_clos R' :=
+@[simp]
+lemma refl_trans_clos_monotone : R ⊆ R' →  refl_trans_clos R ⊆ refl_trans_clos R' :=
   by
-    intros R R' le x y refl
+    intros le x y refl
     induction refl
     . constructor
     . apply refl_trans_clos.step
@@ -189,18 +186,18 @@ lemma refl_trans_sym_is_trans_sym_refl :
           apply red
         . trivial
 
-lemma trans_is_refl_trans : ∀ x y : A, x ~>+ y → x ~>* y :=
+lemma trans_is_refl_trans : x ~>+ y → x ~>* y :=
 by
-  intros x y red
+  intros red
   induction red
   . apply refl_trans_clos.step; trivial
     constructor
   . case step red _ ih =>
     apply refl_trans_clos.step <;> trivial
 
-lemma refl_trans_is_trans_or_eq : ∀ x y : A, x ~>* y → x = y ∨ x ~>+ y :=
+lemma refl_trans_is_trans_or_eq : x ~>* y → x = y ∨ x ~>+ y :=
 by
-  intros x y red
+  intros red
   induction red
   . left; trivial
   . case step red _ ih =>
@@ -209,9 +206,9 @@ by
       simp [*] at *; trivial
     . apply trans_clos.step <;> trivial
 
-lemma refl_trans_step_is_trans : ∀ x y z : A, x ~> z → z ~>* y → x ~>+ y :=
+lemma refl_trans_step_is_trans : x ~> z → z ~>* y → x ~>+ y :=
 by
-  intros x y z red_x_z red_z_y
+  intros red_x_z red_z_y
   revert red_x_z x
   induction red_z_y <;> intros x red_x_?
   . constructor; trivial
@@ -220,9 +217,10 @@ by
     apply ih; trivial
 
 
-lemma sym_inv : ∀ (R : A → A → Prop), R⁻¹ ⊆ sym_clos R :=
- by intros R x y red
-    apply sym_clos.inv; trivial
+@[simp]
+lemma sym_inv : R⁻¹ ⊆ sym_clos R :=
+by intros x y red
+   apply sym_clos.inv; trivial
 
 def diverge_from (x : A) : Prop :=
   ∃ xs : Nat → A, xs 0 = x ∧ ∀ n, xs n ~> xs (n+1)
@@ -233,7 +231,7 @@ def normalizing : Prop := ∀ x : A, normalizes R x
 
 def normal (x : A) : Prop := ¬ (∃ x', x ~> x')
 
-theorem normal_normalizing (x : A) : normal R x → normalizes R x :=
+theorem normal_normalizing : normal R x → normalizes R x :=
 by
   simp [normal]
   intros norm_x div_x
@@ -244,9 +242,9 @@ by
     apply incr_case
 
 -- An alternate way to define normality.
-lemma normal_red : ∀ x y, normal R x → x ~>* y → x = y :=
+lemma normal_red : normal R x → x ~>* y → x = y :=
 by
-  intros x y norm red
+  intros norm red
   cases red; trivial
   case step y _ _ =>
   by_contra
@@ -412,7 +410,7 @@ by
 
 #check Classical.em
 
-lemma normalizing_normal (x : A) : normalizes R x → ∃ y : A, x ~>* y ∧ normal R y
+lemma normalizing_normal : normalizes R x → ∃ y : A, x ~>* y ∧ normal R y
 :=
 by
   apply normalizes_ind
@@ -484,25 +482,25 @@ lemma church_rosser_implies_confluent : church_rosser R → confluent R :=
     trivial
 
 -- quite useful manipulations
-lemma swap_joins : ∀ x y, x ~>*.*<~ y → y ~>*.*<~ x :=
+lemma swap_joins : x ~>*.*<~ y → y ~>*.*<~ x :=
 by
-  intros x y joins
+  intros joins
   cases' joins with z h
   cases h
   exists z
 
-lemma red_joins : ∀ x y z, x ~> y → y ~>*.*<~ z → x ~>*.*<~ z :=
+lemma red_joins : x ~> y → y ~>*.*<~ z → x ~>*.*<~ z :=
 by
-  intros x y z red_x_y joins_y_z
+  intros red_x_y joins_y_z
   cases' joins_y_z with w h
   cases h
   exists w; constructor
   . apply refl_trans_clos.step <;> trivial
   . trivial
 
-lemma reds_joins_left : ∀ x y z, x ~>* y → y ~>*.*<~ z → x ~>*.*<~ z :=
+lemma reds_joins_left : x ~>* y → y ~>*.*<~ z → x ~>*.*<~ z :=
 by
-  intros x y z red_x_y joins_y_z
+  intros red_x_y joins_y_z
   induction' red_x_y with _ _ _ _ _ _ ih
   . trivial
   . apply red_joins
@@ -510,12 +508,12 @@ by
     . have h' := ih joins_y_z
       trivial
 
-lemma reds_joins_right : ∀ x y z, x ~>* z → y ~>*.*<~ z → y ~>*.*<~ x :=
+lemma reds_joins_right : x ~>* z → y ~>*.*<~ z → y ~>*.*<~ x :=
 by
-  intros x y z red_x_y joins_y_z
+  intros red_x_y joins_y_z
   apply swap_joins
-  have joins_z_y := swap_joins _ _ _ joins_y_z
-  apply (reds_joins_left _ x z y) <;> trivial
+  have joins_z_y := swap_joins _ joins_y_z
+  apply (reds_joins_left _) <;> trivial
 
 -- this one is surprising, but not too tough.
 lemma semi_confluent_implies_confluent : semi_confluent R → confluent R :=
@@ -729,7 +727,7 @@ by
     . trivial
   intros x; apply (h x).1
 
--- When proving confluence, it's actually tedious to always handle the reflexive case.
+-- When proving confluence, it's sometimes tedious to always handle the reflexive case.
 def confluent' := ∀ x y z : A, x ~>+ y → x ~>+ z → y ~>*.*<~ z
 
 lemma confluent'_implies_confluent : confluent' R → confluent R :=
@@ -737,7 +735,7 @@ by
   intros conf'
   apply semi_confluent_implies_confluent
   intros x y z red_x_y red_x_z
-  have h := refl_trans_is_trans_or_eq _ _ _ red_x_z
+  have h := refl_trans_is_trans_or_eq _ red_x_z
   cases h
   . case a.inl h =>
     simp [← h]
