@@ -47,18 +47,28 @@ infixl:50 " ~>+ "   => trans_clos R
 infixl:50 " ~>* "   => refl_trans_clos R
 infixl:50 " <~>* "  => refl_trans_sym_clos R
 
-lemma both_inclusions : ∀ (R R' : A → A → Prop),
-  R ⊆ R' → R' ⊆ R → R ≅ R' :=
+lemma both_inclusions : R ⊆ R' → R' ⊆ R → R ≅ R' :=
   by
-    intros R R' le_1 le_2 x y
+    intros le_1 le_2 x y
     constructor
     . apply le_1
     . apply le_2
 
-lemma trans_clos_monotone : ∀ (R R' : A → A → Prop),
- R ⊆ R' →  trans_clos R ⊆ trans_clos R' :=
+lemma equiv_left : R ≅ R' → R ⊆ R' :=
+by
+  simp; intro h x y red
+  apply (h _ _).1; trivial
+
+lemma equiv_right : R ≅ R' → R' ⊆ R :=
+by
+  simp; intro h x y red
+  apply (h _ _).2; trivial
+
+
+
+lemma trans_clos_monotone : R ⊆ R' →  trans_clos R ⊆ trans_clos R' :=
   by
-    intros R R' le x y tr
+    intros le x y tr
     induction tr
     . constructor
       apply le; trivial
@@ -84,6 +94,7 @@ lemma refl_clos_monotone : ∀ (R R' : A → A → Prop),
     . constructor
     . apply refl_clos.base
       apply le; trivial
+
 
 lemma trans_clos_transitive : ∀ (R : A → A → Prop) x y z,
   trans_clos R x y → trans_clos R y z → trans_clos R x z :=
@@ -149,6 +160,17 @@ lemma refl_sym_is_sym_refl :
         . constructor
         . apply refl_clos.base; apply sym_clos.inv; trivial
 
+
+
+lemma refl_trans_clos_monotone : ∀ (R R' : A → A → Prop),
+ R ⊆ R' →  refl_trans_clos R ⊆ refl_trans_clos R' :=
+  by
+    intros R R' le x y refl
+    induction refl
+    . constructor
+    . apply refl_trans_clos.step
+      apply le; trivial
+      trivial
 
 lemma refl_trans_sym_is_trans_sym_refl :
   refl_clos (trans_clos (sym_clos R)) ≅ trans_clos (sym_clos (refl_clos R)) :=
@@ -815,7 +837,16 @@ by
   simp
   intros equiv
   simp [confluent, wedge, joins]
-  sorry
+  intros h y z x red_x_y red_y_z
+  cases' (h y z x _ _) with w h
+  cases' h with h1 h2
+  exists w
+  constructor <;> apply refl_trans_clos_monotone
+  . intros x y; apply (equiv _ _).1
+  . trivial
+  . intros x y; apply (equiv _ _).1
+  . trivial
+
 
 lemma trans_clos_idempotent : ∀ R, refl_trans_clos (refl_trans_clos R) ≅ refl_trans_clos R :=
 by
