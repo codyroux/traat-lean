@@ -43,9 +43,9 @@ set_option quotPrecheck false
 
 infix:60 " ⊆ " => (λ (R R' : A → A → Prop) ↦ ∀ x y, R x y → R' x y)
 infix:60 " ≅ " => (λ (R R' : A → A → Prop) ↦ ∀ x y, R x y ↔ R' x y)
-postfix:100 " ⁻¹ " => (λ (R : A → A → Prop) ↦ λ x y ↦ R y x)
+postfix:100 " ⁻¹ " => (λ (R : A → A → Prop) x y ↦ R y x)
 infixl:50 " ~> " => R
-
+infixl:50 " ~>= "   => refl_clos R
 infixl:50 " ~>+ "   => trans_clos R
 infixl:50 " ~>* "   => refl_trans_clos R
 infixl:50 " <~>* "  => refl_trans_sym_clos R
@@ -785,3 +785,102 @@ by
     . trivial
     . simp; trivial
   . aesop
+
+lemma refl_is_refl_trans : x ~>= y → x ~>* y := by aesop
+
+def strongly_confluent := ∀ x y z, x ~> y → x ~> z → ∃ w, y ~>* w ∧ z ~>= w
+
+lemma strong_confluent_implies_confluent : strongly_confluent R → confluent R :=
+by
+  intros str_conf
+  apply semi_confluent_implies_confluent
+  unfold semi_confluent
+  intros x y z red_x_y red_x_z
+  revert red_x_y y
+  induction' red_x_z with a x x₂ xₙ red_x_x2 red_x2_xn ih
+  . intros y _; exists y; aesop
+  . intros y red_x_y
+    cases' (str_conf _ _ _ red_x_y red_x_x2) with y₂ h
+    cases h.2
+    . exists xₙ; constructor
+      . apply refl_trans_clos_transitive
+        . apply h.1
+        . trivial
+      . constructor
+    . have ih : y₂ ~>*.*<~ xₙ :=
+        by apply ih; trivial
+      cases' ih with w _
+      exists w; constructor
+      . apply refl_trans_clos_transitive
+        . apply h.1
+        . aesop
+      . aesop
+
+infix:50 " ~>₁ " => R
+infix:50 " ~>₂ " => S
+infix:50 " ~>₁* " => refl_trans_clos R
+infix:50 " ~>₂* " => refl_trans_clos S
+infix:200 " ∪ " => λ R S x y ↦ R x y ∨ S x y
+
+-- This would look a little nicer with some notation.
+-- but the idea is that you can "re-order" steps so that
+-- the 1 (resp 2) steps come first.
+-- Note that this is a very strong condition!
+-- It basically means that ~>₁ steps can "ignore" ~>₂
+-- steps entirely and vice versa.
+def commute := ∀ x y z, x ~>₁* y → x ~>₂* z →
+               ∃ w, y ~>₂* w ∧ z ~>₁* w
+
+infix:200 " ∘ " => λ R S x y ↦ ∃ z, R x z ∧ S z y
+
+lemma refl_trans_union_left : (. ~>₁* .) ⊆ refl_trans_clos (R∪S) :=
+by
+  simp; intros x y red_x_y
+  induction red_x_y <;> aesop
+
+lemma refl_trans_union_right : (. ~>₂* .) ⊆ refl_trans_clos (R∪S) :=
+by
+  simp; intros x y red_x_y
+  induction red_x_y <;> aesop
+
+-- Ok this means we can break down confluence into pieces.
+lemma commuting_confluence_implies_confluence :
+  commute R S → confluent R → confluent S → confluent (R ∪ S)
+:=
+  by --let's apply some of our machinery
+    intros commut_r_s conf_r conf_s
+    apply inc_refl_trans_confl
+    . have h : R ∪ S ⊆ (. ~>₁* .) ∘ (. ~>₂* .) :=
+        by
+          simp; intros x y red_or
+          cases red_or
+          . exists y; aesop
+          . exists x; aesop
+      apply h
+    . simp
+      intros x y z red_x_z red_z_y
+      apply refl_trans_clos_transitive
+      . apply refl_trans_union_left
+        trivial
+      . apply refl_trans_union_right; trivial
+    . apply diamond_implies_confluent
+      simp [diamond]
+      intros x y z y1 red_x_y1 red_y1_y
+      intros z1 red_x_z1 red_z1_z
+      have wedge_y1_z1 : wedge R y1 z1 :=
+        by exists x
+      have join_y1_z1 := conf_r _ _ wedge_y1_z1
+      cases' join_y1_z1 with w h
+      clear wedge_y1_z1
+      have h1 := commut_r_s _ _ _ h.1 red_y1_y
+      have h2 := commut_r_s _ _ _ h.2 red_z1_z
+      cases' h1 with w1 h1
+      cases' h2 with w2 h2
+      have wedge_w1_w2 : wedge S w1 w2 :=
+        by exists w; aesop
+      have join_w1_w2 : joins S w1 w2 := by apply conf_s; trivial
+      cases' join_w1_w2 with omega h3
+      clear wedge_w1_w2
+      exists omega; constructor
+      . exists w1; aesop
+      . exists w2; aesop
