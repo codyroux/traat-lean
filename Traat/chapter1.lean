@@ -5,9 +5,7 @@ section variable {A : Type}
 
 section variable (R : A → A → Prop)
 
-#check R
-
-section variable [inhabited_A : Nonempty A]
+-- section variable [inhabited_A : Nonempty A]
 
 -- These are a little ad-hoc but they'll serve
 
@@ -23,11 +21,11 @@ inductive sym_clos (R  : A → A → Prop) : A → A → Prop
 | base : ∀ a b, R a b → sym_clos R a b
 | inv : ∀ a b, R b a → sym_clos R a b
 
-inductive refl_trans_clos (R  : A → A → Prop) : A → A → Prop :=
+inductive refl_trans_clos (R  : A → A → Prop) : A → A → Prop where
 | refl : ∀ a, refl_trans_clos R a a
 | step : ∀ a b c, R a b → refl_trans_clos R b c → refl_trans_clos R a c
 
-inductive refl_trans_sym_clos (R  : A → A → Prop) : A → A → Prop :=
+inductive refl_trans_sym_clos (R  : A → A → Prop) : A → A → Prop where
 | refl : ∀ a, refl_trans_sym_clos R a a
 | base : ∀ a b, R a b → refl_trans_sym_clos R a b
 | trans : ∀ a b c, refl_trans_sym_clos R a b →
@@ -76,96 +74,37 @@ lemma sym_clos_monotone : ∀ (R R' : A → A → Prop),
     . apply sym_clos.inv
       apply le; trivial
 
-lemma refl_clos_monotone : ∀ (R R' : A → A → Prop),
- R ⊆ R' →  refl_clos R ⊆ refl_clos R' :=
+lemma refl_clos_monotone (R R' : A → A → Prop)
+ : R ⊆ R' → refl_clos R ⊆ refl_clos R' :=
   by
-    intros R R' le x y refl
+    intros le x y refl
     induction refl
     . constructor
     . apply refl_clos.base
       apply le; trivial
 
-lemma trans_clos_transitive : ∀ (R : A → A → Prop) x y z,
-  trans_clos R x y → trans_clos R y z → trans_clos R x z :=
-  by
-    intros R x y z tr_x_y
-    induction' tr_x_y with _ _ _ _ _ _ _ _ ih
-    . intros rest
-      apply trans_clos.step <;> trivial
-    . intros rest
-      apply trans_clos.step; trivial
-      apply ih; trivial
+lemma trans_clos_transitive (R : A → A → Prop) x y z
+  : trans_clos R x y → trans_clos R y z → trans_clos R x z := by
+  sorry
 
-lemma refl_trans_clos_transitive : ∀ (R : A → A → Prop) x y z,
-  refl_trans_clos R x y → refl_trans_clos R y z → refl_trans_clos R x z :=
-  by
-    intros R x y z tr_x_y
-    induction' tr_x_y with _ _ _ _ _ _ ih
-    . intros rest; trivial
-    . intros rest
-      apply refl_trans_clos.step; trivial
-      apply ih; trivial
-
+lemma refl_trans_clos_transitive (R : A → A → Prop) x y z
+  : refl_trans_clos R x y → refl_trans_clos R y z → refl_trans_clos R x z := by
+  sorry
 
 lemma refl_trans_is_trans_refl :
   refl_clos (trans_clos R) ≅ trans_clos (refl_clos R)
-   :=
-   by
-    apply both_inclusions <;> intros x y hyp
-    . cases hyp
-      . constructor; constructor
-      . apply trans_clos_monotone R
-        -- this should be a lemma :/
-        . intros; constructor; trivial
-        . trivial
-    . induction' hyp with _ _ rc _ _ _ rc step ih
-      . cases rc
-        . constructor
-        . apply refl_clos.base
-          apply trans_clos.base; trivial
-      . cases rc; trivial
-        apply refl_clos.base
-        cases ih
-        . apply trans_clos.base; trivial
-        . apply trans_clos.step <;> trivial
-
+   := by
+  sorry
 
 lemma refl_sym_is_sym_refl :
   refl_clos (sym_clos R) ≅ sym_clos (refl_clos R)
-  :=
-  by
-    apply both_inclusions <;> intros x y hyp
-    . cases' hyp with _ base
-      . constructor; constructor
-      . cases base
-        . constructor; apply refl_clos.base; trivial
-        . apply sym_clos.inv
-          apply refl_clos.base; trivial
-    . cases' hyp with base base
-      . cases base
-        . constructor
-        . apply refl_clos.base; constructor; trivial
-      . cases base
-        . constructor
-        . apply refl_clos.base; apply sym_clos.inv; trivial
+  := by
+  sorry
 
 
 lemma refl_trans_sym_is_trans_sym_refl :
-  refl_clos (trans_clos (sym_clos R)) ≅ trans_clos (sym_clos (refl_clos R)) :=
-    by
-      apply both_inclusions <;> intros
-      . apply trans_clos_monotone
-        . intros x y red
-          apply (refl_sym_is_sym_refl _ _ _).1
-          apply red
-        . apply (refl_trans_is_trans_refl _ _ _).1
-          trivial
-      . apply (refl_trans_is_trans_refl _ _ _).2
-        apply trans_clos_monotone
-        . intros x y red
-          apply  (refl_sym_is_sym_refl _ _ _).2
-          apply red
-        . trivial
+  refl_clos (trans_clos (sym_clos R)) ≅ trans_clos (sym_clos (refl_clos R)) := by
+  sorry
 
 lemma trans_is_refl_trans : ∀ x y : A, x ~>+ y → x ~>* y :=
 by
@@ -248,14 +187,8 @@ by
 
 #print Classical.axiomOfChoice
 
-theorem iterate_left : ∀ {A} (f : A → A) (n : ℕ) (x : A), f^[n+1] x = f (f^[n] x) :=
-by
-  intros A f n
-  induction' n with n ihn
-  . simp [Nat.iterate]
-  . simp [Nat.add, Nat.iterate]
-    intros x
-    apply ihn
+theorem iterate_left {A} (f : A → A) (n : ℕ) (x : A) : f^[n+1] x = f (f^[n] x) := by
+  sorry
 
 -- This is gonna need a clever application of AC!
 lemma dependent_choice' : ∀ {A} (Q : A → A → Prop) (a : A),
@@ -338,7 +271,7 @@ by
     . exact h
     . intros a npa
       apply Classical.byContradiction
-      simp; intros p
+      intros p; simp at p
       apply npa
       apply IH; intros y ry
       apply Classical.byContradiction; intros npy
@@ -390,25 +323,8 @@ by
 
 #check Classical.em
 
-lemma normalizing_normal (x : A) : normalizes R x → ∃ y : A, x ~>* y ∧ normal R y
-:=
-by
-  apply normalizes_ind
-  intros x h
-  by_cases (∃ y, x ~> y)
-  . cases' h with y h'
-    cases' h _ h' with z h''
-    cases h''
-    exists z
-    constructor
-    . apply refl_trans_clos.step
-      . apply h'
-      . trivial
-    . trivial
-  . exists x
-    constructor
-    . apply refl_trans_clos.refl
-    . apply h
+lemma normalizing_normal (x : A) : normalizes R x → ∃ y : A, x ~>* y ∧ normal R y := by
+  sorry
 
 def joins : ∀ (_x _y : A), Prop := λ x y ↦ ∃ z : A, x ~>* z ∧ y ~>* z
 
@@ -441,15 +357,8 @@ by
   apply refl_trans_sym_clos.base; trivial
 
 
-lemma wedge_inc_refl_sym_trans : wedge R ⊆ (. <~>* .) :=
-  by
-    intros x y wedge
-    cases' wedge with w h
-    cases' h with h1 h2
-    apply (refl_trans_sym_clos.trans _ w)
-    . apply refl_trans_sym_clos.inv
-      apply refl_trans_sym_refl_trans; trivial
-    . apply refl_trans_sym_refl_trans; trivial
+lemma wedge_inc_refl_sym_trans : wedge R ⊆ (. <~>* .) := by
+  sorry
 
 -- this one is trivial
 lemma church_rosser_implies_confluent : church_rosser R → confluent R :=
@@ -462,31 +371,14 @@ lemma church_rosser_implies_confluent : church_rosser R → confluent R :=
     trivial
 
 -- quite useful manipulations
-lemma swap_joins : ∀ x y, x ~>*.*<~ y → y ~>*.*<~ x :=
-by
-  intros x y joins
-  cases' joins with z h
-  cases h
-  exists z
+lemma swap_joins : ∀ x y, x ~>*.*<~ y → y ~>*.*<~ x := by
+  sorry
 
-lemma red_joins : ∀ x y z, x ~> y → y ~>*.*<~ z → x ~>*.*<~ z :=
-by
-  intros x y z red_x_y joins_y_z
-  cases' joins_y_z with w h
-  cases h
-  exists w; constructor
-  . apply refl_trans_clos.step <;> trivial
-  . trivial
+lemma red_joins : ∀ x y z, x ~> y → y ~>*.*<~ z → x ~>*.*<~ z := by
+  sorry
 
-lemma reds_joins_left : ∀ x y z, x ~>* y → y ~>*.*<~ z → x ~>*.*<~ z :=
-by
-  intros x y z red_x_y joins_y_z
-  induction' red_x_y with _ _ _ _ _ _ ih
-  . trivial
-  . apply red_joins
-    . trivial
-    . have h' := ih joins_y_z
-      trivial
+lemma reds_joins_left : ∀ x y z, x ~>* y → y ~>*.*<~ z → x ~>*.*<~ z := by
+  sorry
 
 lemma reds_joins_right : ∀ x y z, x ~>* z → y ~>*.*<~ z → y ~>*.*<~ x :=
 by
@@ -496,21 +388,8 @@ by
   apply (reds_joins_left _ x z y) <;> trivial
 
 -- this one is surprising, but not too tough.
-lemma semi_confluent_implies_confluent : semi_confluent R → confluent R :=
-by
-  intros semi x y wedge
-  cases' wedge with w h
-  cases' h with h1 h2
-  revert h2 y
-  induction' h1 with z x y y' red_x_y _red_y_y' ih <;> intros z red_x_z
-  . exists z; constructor
-    . trivial
-    . constructor
-  . have h := semi x y z red_x_y red_x_z
-    cases' h with z' h
-    cases' h with h1 h2
-    have ih := ih z' h1
-    apply reds_joins_right <;> trivial
+lemma semi_confluent_implies_confluent : semi_confluent R → confluent R := by
+  sorry
 
 
 -- This has a very simple "diagram proof":
@@ -537,12 +416,7 @@ by
     . constructor
     . constructor; trivial; constructor
   case a.step a b c red_a_b _red_b_c ih =>
-    intros d red_a_d
-    have h := (sc _ _ _ red_a_b red_a_d)
-    cases' h with e h
-    cases' h with red_b_e red_d_e
-    apply red_joins; apply red_d_e
-    apply ih; trivial
+    sorry
 
 -- also trivial
 lemma confluent_implies_weakly_confluent : confluent R → weakly_confluent R :=
@@ -554,33 +428,8 @@ by
 
 -- this one is a little more work.
 -- again, something clear from a diagram requires a tedious mechanical proof
-lemma confluent_implies_church_rosser : confluent R → church_rosser R :=
-by
-  intros confl
-  unfold church_rosser
-  intros x y red_x_y
-  induction red_x_y
-  case refl x =>
-    exists x ; repeat constructor
-  case base x y red_x_y =>
-    exists y; constructor
-    . apply refl_trans_clos.step; trivial; constructor
-    . constructor
-  case trans x y z red_x_y red_y_z joins_x_y joins_y_z =>
-    cases' joins_x_y with w1 h1
-    cases' h1 with h11 h12
-    cases' joins_y_z with w2 h2
-    cases' h2 with h21 h22
-    have h' : wedge R w1 w2 := by
-      exists y
-    have h := confl w1 w2 h'
-    cases' h with w h''
-    exists w; cases' h'' with h3 h4
-    constructor <;> apply refl_trans_clos_transitive <;> trivial
-  case inv _ h =>
-    cases' h with w h'
-    cases' h' with h1 h2
-    exists w
+lemma confluent_implies_church_rosser : confluent R → church_rosser R := by
+  sorry
 
 -- Weakly confluent does not imply confluent in general!
 inductive X := | a | b | c | d
@@ -603,24 +452,8 @@ def RX : X → X → Prop :=
   ∨ (x = c ∧ y = b)
   ∨ (x = c ∧ y = d)
 
-lemma not_joins_a_d : ¬ joins RX X.a X.d :=
-by
-  intros h
-  cases' h with w h
-  cases' h with h1 h2
-  have eq_a : X.a = w := by
-    apply normal_red RX
-    . intros h
-      cases' h with w h
-      simp [RX] at h
-    . apply h1
-  have eq_d : X.d = w := by
-    apply normal_red RX
-    . intros h
-      cases' h with w h
-      simp [RX] at h
-    . apply h2
-  simp [← eq_a] at eq_d
+lemma not_joins_a_d : ¬ joins RX X.a X.d := by
+  sorry
 
 
 lemma weakly_confluent_does_not_imply_confluent : ∃ (A : Type) (R : A → A → Prop),
@@ -631,7 +464,7 @@ by
   . intros x y z r_x_y r_x_z
     simp [RX] at r_x_y
     simp [RX] at r_x_z
-    -- ugh this is tedious. Probably there's some nuclear tactic here
+    -- ugh this is tedious. Probably there's some nuclear tactic here (grind?)
     cases r_x_y <;> cases r_x_z <;> simp [*] at *
     . exists X.a; repeat constructor
     . exists X.a; try constructor
@@ -754,38 +587,8 @@ by
     . case step z' red_x_z' red_z'_z =>
       -- finally use weak confluence
       have join1 := weak _ _ _ red_x_y' red_x_z'
-      cases' join1 with w h'
-      have join2 :=
-        ih y' (trans_clos.base _ _ red_x_y') y w
-          (And.intro red_y'_y h'.1)
-      have join3 := ih z' (trans_clos.base _ _ red_x_z') w z
-          (And.intro h'.2 red_z'_z)
-      cases' join2 with w1 h1
-      cases' join3 with w2 h2
-      have red_x_w : x ~>+ w :=
-        by
-          apply refl_trans_step_is_trans
-          . apply red_x_z'
-          . apply h'.2
-      have join4 := ih w red_x_w w1 w2
-        (And.intro h1.2 h2.1)
-      cases' join4 with omega h3
-      exists omega; constructor
-      . apply refl_trans_clos_transitive
-        . apply h1.1
-        . apply h3.1
-      . apply refl_trans_clos_transitive
-        . apply h2.2
-        . apply h3.2
+      sorry
 
 lemma confluent_unique_nf : confluent R →
-  ∀ x y z, x ~>* y → x ~>*z → normal R y → normal R z → y = z :=
-by
-  intros conf x y z red_x_y red_x_z norm_y norm_z
-  have wdg_y_z : wedge _ y z := Exists.intro x ⟨ red_x_y, red_x_z ⟩
-  have h : y ~>*.*<~ z := conf _ _ wdg_y_z
-  cases' h with w h
-  cases h
-  have eq_y_w : y = w := by apply normal_red <;> trivial
-  have eq_z_w : z = w := by  apply normal_red <;> trivial
-  simp [*]
+  ∀ x y z, x ~>* y → x ~>*z → normal R y → normal R z → y = z := by
+  sorry
