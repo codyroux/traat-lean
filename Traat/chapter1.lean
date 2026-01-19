@@ -77,24 +77,60 @@ lemma sym_clos_monotone : ∀ (R R' : A → A → Prop),
 lemma refl_clos_monotone (R R' : A → A → Prop)
  : R ⊆ R' → refl_clos R ⊆ refl_clos R' :=
   by
-    intros le x y refl
-    induction refl
+    intros le x y re
+    induction re
     . constructor
     . apply refl_clos.base
       apply le; trivial
 
 lemma trans_clos_transitive (R : A → A → Prop) x y z
-  : trans_clos R x y → trans_clos R y z → trans_clos R x z := by
-  sorry
+  (h₁ : trans_clos R x y)
+  (h₂ : trans_clos R y z)
+  : trans_clos R x z := by
+  revert h₂ z
+  induction h₁
+  case base a b h =>
+    intros z h₂
+    apply trans_clos.step <;> assumption
+  case step a b c h h₁ ih =>
+    intros z h₂
+    apply trans_clos.step; assumption
+    grind
 
 lemma refl_trans_clos_transitive (R : A → A → Prop) x y z
-  : refl_trans_clos R x y → refl_trans_clos R y z → refl_trans_clos R x z := by
-  sorry
+  (h₁ : refl_trans_clos R x y) (h₂ : refl_trans_clos R y z) : refl_trans_clos R x z := by
+  revert h₂ z
+  induction h₁
+  case refl a =>
+    intros z h₂; grind
+  case step a b c h h₁ ih =>
+    intros z h₂
+    apply refl_trans_clos.step; assumption
+    grind
 
 lemma refl_trans_is_trans_refl :
   refl_clos (trans_clos R) ≅ trans_clos (refl_clos R)
    := by
-  sorry
+  simp; intros x y; constructor <;> intros h
+  . induction h
+    case mp.refl => constructor; constructor
+    case mp.base z h =>
+      induction h
+      case base => grind [trans_clos.base, refl_clos.base]
+      case step a b c r_a_b h₁ h₂ =>
+        grind [trans_clos.step, refl_clos.base]
+  . induction h
+    case base a b h =>
+      apply refl_clos_monotone <;> try trivial
+      grind [trans_clos]
+    case step a b c h₁ h₂ ih =>
+      cases h₁ <;> try trivial
+      cases ih
+      case refl => grind [refl_clos.base, trans_clos.base]
+      case base =>
+        apply refl_clos.base
+        apply trans_clos.step <;> trivial
+
 
 lemma refl_sym_is_sym_refl :
   refl_clos (sym_clos R) ≅ sym_clos (refl_clos R)
