@@ -104,7 +104,6 @@ lemma refl_sym_is_sym_refl :
   refl_clos (sym_clos R) ≅ sym_clos (refl_clos R)
   := by intros x y <;> grind
 
-
 lemma refl_trans_sym_is_trans_sym_refl :
   refl_clos (trans_clos (sym_clos R)) ≅ trans_clos (sym_clos (refl_clos R)) := by
   simp; intros x y; constructor <;> intros h
@@ -129,6 +128,7 @@ by
   intros x y red
   induction red <;> grind
 
+@[grind =>]
 lemma refl_trans_step_is_trans : ∀ x y z : A, x ~> z → z ~>* y → x ~>+ y :=
 by
   intros x y z red_x_z red_z_y
@@ -402,9 +402,19 @@ by
   . trivial
 
 -- this one is a little more work.
--- again, something clear from a diagram requires a tedious mechanical proof
+-- again, something clear from a diagram requires a somewhat tedious mechanical proof
 lemma confluent_implies_church_rosser : confluent R → church_rosser R := by
-  sorry
+  intros conf y z equiv_y_z
+  induction equiv_y_z
+  case trans a b c _ _ h₁ h₂ =>
+    have ⟨w₁, _, _⟩ := h₁
+    have ⟨w₂, _, _⟩ := h₂
+    have ⟨w₃, _, _⟩ := conf w₁ w₂ ⟨b, by trivial, by trivial⟩
+    exists w₃
+    grind [refl_trans_clos_transitive]
+  case inv a b _ h => grind
+  case refl a => exists a; grind
+  case base a b _ => exists b; grind
 
 -- Weakly confluent does not imply confluent in general!
 inductive X where | a | b | c | d
@@ -442,7 +452,7 @@ by
     simp [RX] at r_x_z
     -- ugh this is tedious. Probably there's some nuclear tactic here (grind?)
     cases r_x_y <;> cases r_x_z <;> simp [*] at *
-    . exists X.a; repeat constructor
+    . exists X.a; grind
     . exists X.a; try constructor
       . constructor
       . simp [*]; constructor; simp [RX]
@@ -485,7 +495,7 @@ by
       . constructor
 
 
-inductive close_below (P : A → Prop) : A → Prop :=
+inductive close_below (P : A → Prop) : A → Prop where
   | here : ∀ x, P x → close_below P x
 
 -- Sometimes it's easier to work with the transitive closure for WF induction.
@@ -498,23 +508,8 @@ by
   have h : ∀ x, Q x :=
   by
     intros x
-    apply normalizing_ind R
-    . intros x ih'
-      constructor
-      . apply ih
-        intros y red_x_y
-        cases red_x_y
-        . apply (ih' _ _).1
-          trivial
-        . apply (ih' _ _).2 <;> trivial
-      -- FIXME: complete duplication!
-      . intros y red_x_y
-        cases red_x_y
-        . apply (ih' _ _).1
-          trivial
-        . apply (ih' _ _).2 <;> trivial
-    . trivial
-  intros x; apply (h x).1
+    apply normalizing_ind R <;> grind
+  grind
 
 -- When proving confluence, it's actually tedious to always handle the reflexive case.
 def confluent' := ∀ x y z : A, x ~>+ y → x ~>+ z → y ~>*.*<~ z
@@ -528,13 +523,8 @@ by
   cases h
   . case a.inl h =>
     simp [← h]
-    exists y; repeat constructor
-    trivial
-    constructor
-  . apply conf'
-    . constructor; trivial
-    . trivial
-
+    exists y <;> grind
+  . apply conf' x y z <;> grind
 
 -- but if R is normalizing...
 theorem newmans_lemma : normalizing R → weakly_confluent R → confluent R :=
@@ -553,18 +543,22 @@ by
   (apply h <;> try trivial) <;> try apply norm_trans
   clear h
   intros x ih y z wedge
-  -- FIXME: this is horrid
   cases wedge.1
-  . exists z; constructor; apply wedge.2; constructor
+  . exists z; grind
   . case a.step y' red_x_y' red_y'_y =>
     cases wedge.2
-    . exists y; constructor; constructor
-      apply wedge.1
+    . exists y; grind
     . case step z' red_x_z' red_z'_z =>
       -- finally use weak confluence
-      have join1 := weak _ _ _ red_x_y' red_x_z'
-      sorry
+      have ⟨w₁, _, _⟩ := weak _ _ _ red_x_y' red_x_z'
+      have ⟨w₂, _, _⟩ := ih y' (by grind) y w₁ (by trivial)
+      have ⟨w₃, _ , _⟩ := ih z' (by grind) z w₁ (by trivial)
+      have h : trans_clos R x w₁ := by grind
+      have ⟨w₄, _, _⟩ := ih w₁ h w₁ w₂ (by grind)
+      grind
 
 lemma confluent_unique_nf : confluent R →
   ∀ x y z, x ~>* y → x ~>*z → normal R y → normal R z → y = z := by
-  sorry
+  intros conf x y z red_x_y red_x_z nf_y nf_z
+  have ⟨w, h₁, h₂⟩ := conf y z ⟨x, by trivial, by trivial⟩
+  grind
