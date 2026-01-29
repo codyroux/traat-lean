@@ -1,5 +1,4 @@
 import Mathlib.Logic.Function.Iterate
-import Aesop
 
 section variable {A : Type}
 
@@ -50,23 +49,23 @@ infixl:50 " ~>+ "   => trans_clos R
 infixl:50 " ~>* "   => refl_trans_clos R
 infixl:50 " <~>* "  => refl_trans_sym_clos R
 
-lemma both_inclusions : R ⊆ R' → R' ⊆ R → R ≅ R' := by aesop
+lemma both_inclusions : R ⊆ R' → R' ⊆ R → R ≅ R' := by grind
 
-lemma equiv_left : R ≅ R' → R ⊆ R' := by aesop
+lemma equiv_left : R ≅ R' → R ⊆ R' := by grind
 
-lemma equiv_right : R ≅ R' → R' ⊆ R := by aesop
+lemma equiv_right : R ≅ R' → R' ⊆ R := by grind
 
 
 @[simp]
 lemma trans_clos_monotone : R ⊆ R' →  trans_clos R ⊆ trans_clos R' :=
   by
-    intros R R' le x y tr
+    intros le x y tr
     induction tr <;> grind
 
 @[simp]
 lemma sym_clos_monotone : R ⊆ R' →  sym_clos R ⊆ sym_clos R' :=
    by
-    intros R R' le x y sym
+    intros le x y sym
     induction sym <;> grind
 
 lemma refl_clos_monotone (R R' : A → A → Prop)
@@ -117,7 +116,7 @@ lemma refl_trans_sym_is_trans_sym_refl :
 
 lemma trans_is_refl_trans : x ~>+ y → x ~>* y :=
 by
-  intros x y red
+  intros red
   induction red
   . apply refl_trans_clos.step; trivial
     constructor
@@ -125,18 +124,18 @@ by
 
 lemma refl_trans_is_trans_or_eq : x ~>* y → x = y ∨ x ~>+ y :=
 by
-  intros x y red
+  intros red
   induction red <;> grind
 
 @[grind =>]
 lemma refl_trans_step_is_trans : ∀ x y z : A, x ~> z → z ~>* y → x ~>+ y :=
 by
-  intros red_x_z red_z_y
+  intros x y z red_x_z red_z_y
   revert red_x_z x
   induction red_z_y <;> grind
 
 lemma sym_inv : ∀ (R : A → A → Prop), R⁻¹ ⊆ sym_clos R :=
- by intros R x y red <;> grind
+ by intros R x y red; grind
 
 def diverge_from (x : A) : Prop :=
   ∃ xs : Nat → A, xs 0 = x ∧ ∀ n, xs n ~> xs (n+1)
@@ -159,7 +158,7 @@ by
 -- An alternate way to define normality.
 lemma normal_red : normal R x → x ~>* y → x = y :=
 by
-  intros x y norm red
+  intros norm red
   cases red ; trivial
   case step y _ _ =>
   by_contra
