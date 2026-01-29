@@ -5,39 +5,39 @@ section variable {A : Type}
 
 section variable (R : A → A → Prop)
 
-section variable [inhabited_A : Nonempty A]
+-- section variable [inhabited_A : Nonempty A]
 
 -- These are a little ad-hoc but they'll serve
 
-@[aesop unsafe [constructors, cases]]
+@[grind]
 inductive trans_clos (R : A → A → Prop) : A → A → Prop
 | base : ∀ a b, R a b → trans_clos R a b
 | step : ∀ a b c, R a b → trans_clos R b c → trans_clos R a c
 
-@[aesop unsafe [constructors, cases]]
+@[grind]
 inductive refl_clos (R  : A → A → Prop) : A → A → Prop where
 | refl : ∀ a, refl_clos R a a
 | base : ∀ a b, R a b → refl_clos R a b
 
-@[aesop unsafe [constructors, cases]]
+@[grind]
 inductive sym_clos (R  : A → A → Prop) : A → A → Prop
 | base : ∀ a b, R a b → sym_clos R a b
 | inv : ∀ a b, R b a → sym_clos R a b
 
-@[aesop unsafe [constructors, cases]]
-inductive refl_trans_clos (R  : A → A → Prop) : A → A → Prop :=
+@[grind]
+inductive refl_trans_clos (R  : A → A → Prop) : A → A → Prop where
 | refl : ∀ a, refl_trans_clos R a a
 | step : ∀ a b c, R a b → refl_trans_clos R b c → refl_trans_clos R a c
 
-@[aesop unsafe [constructors, cases]]
-inductive refl_trans_sym_clos (R  : A → A → Prop) : A → A → Prop :=
+@[grind]
+inductive refl_trans_sym_clos (R  : A → A → Prop) : A → A → Prop where
 | refl : ∀ a, refl_trans_sym_clos R a a
 | base : ∀ a b, R a b → refl_trans_sym_clos R a b
 | trans : ∀ a b c, refl_trans_sym_clos R a b →
-                       refl_trans_sym_clos R b c →
-                       refl_trans_sym_clos R a c
+                   refl_trans_sym_clos R b c →
+                   refl_trans_sym_clos R a c
 | inv : ∀ a b, refl_trans_sym_clos R b a →
-                    refl_trans_sym_clos R a b
+               refl_trans_sym_clos R a b
 
 set_option quotPrecheck false
 
@@ -60,103 +60,93 @@ lemma equiv_right : R ≅ R' → R' ⊆ R := by aesop
 @[simp]
 lemma trans_clos_monotone : R ⊆ R' →  trans_clos R ⊆ trans_clos R' :=
   by
-    intros le x y tr
-    induction tr <;> aesop
+    intros R R' le x y tr
+    induction tr <;> grind
 
 @[simp]
 lemma sym_clos_monotone : R ⊆ R' →  sym_clos R ⊆ sym_clos R' :=
    by
-    intros le x y sym
-    induction sym <;> aesop
+    intros R R' le x y sym
+    induction sym <;> grind
 
-@[simp]
-lemma refl_clos_monotone : R ⊆ R' →  refl_clos R ⊆ refl_clos R' :=
+lemma refl_clos_monotone (R R' : A → A → Prop)
+ : R ⊆ R' → refl_clos R ⊆ refl_clos R' :=
   by
-    intros le x y refl
-    induction refl <;> aesop
+    intros le x y re
+    induction re <;> grind
 
+lemma trans_clos_transitive (R : A → A → Prop) x y z
+  (h₁ : trans_clos R x y)
+  (h₂ : trans_clos R y z)
+  : trans_clos R x z := by
+  revert h₂ z
+  induction h₁ <;> grind
 
-lemma trans_clos_transitive : trans_clos R x y → trans_clos R y z → trans_clos R x z :=
-  by
-    intros tr_x_y
-    induction tr_x_y <;> aesop
-
-@[aesop unsafe 5%]
-lemma refl_trans_clos_transitive : refl_trans_clos R x y → refl_trans_clos R y z → refl_trans_clos R x z :=
-  by
-    intros tr_x_y
-    induction tr_x_y <;> aesop
-
+lemma refl_trans_clos_transitive (R : A → A → Prop) x y z
+  (h₁ : refl_trans_clos R x y) (h₂ : refl_trans_clos R y z) : refl_trans_clos R x z := by
+  revert h₂ z
+  induction h₁ <;> grind
 
 lemma refl_trans_is_trans_refl :
   refl_clos (trans_clos R) ≅ trans_clos (refl_clos R)
-   :=
-   by
-    apply both_inclusions <;> intros x y hyp
-    . cases hyp
-      . aesop
-      . apply trans_clos_monotone R <;> aesop
-    . induction' hyp with _ _ rc _ _ _ rc step ih
-      . cases rc <;> aesop
-      . cases rc; trivial
-        apply refl_clos.base; aesop
+   := by
+  simp; intros x y; constructor <;> intros h
+  . induction h
+    case mp.refl => grind
+    case mp.base z h =>
+      induction h <;> grind
+  . induction h
+    case base a b h => grind
+    case step a b c h₁ h₂ ih => grind
 
 @[simp]
 lemma refl_sym_is_sym_refl :
   refl_clos (sym_clos R) ≅ sym_clos (refl_clos R)
-  :=
-  by
-    apply both_inclusions <;> intros x y hyp <;> aesop
-
-@[simp]
-lemma refl_trans_clos_monotone : R ⊆ R' →  refl_trans_clos R ⊆ refl_trans_clos R' :=
-  by
-    intros le x y refl
-    induction refl <;> aesop
+  := by intros x y <;> grind
 
 lemma refl_trans_sym_is_trans_sym_refl :
-  refl_clos (trans_clos (sym_clos R)) ≅ trans_clos (sym_clos (refl_clos R)) :=
-    by
-      apply both_inclusions <;> intros
-      . apply trans_clos_monotone
-        . intros
-          apply (refl_sym_is_sym_refl _ _ _).1
-          trivial
-        . apply (refl_trans_is_trans_refl _ _ _).1
-          trivial
-      . apply (refl_trans_is_trans_refl _ _ _).2
-        apply trans_clos_monotone
-        . intros x y red
-          apply  (refl_sym_is_sym_refl _ _ _).2
-          trivial
-        . trivial
+  refl_clos (trans_clos (sym_clos R)) ≅ trans_clos (sym_clos (refl_clos R)) := by
+  simp; intros x y; constructor <;> intros h
+  . induction h
+    case _ => grind
+    case _ z ih =>
+      apply trans_clos_monotone (R := sym_clos R)
+      . intros; apply sym_clos_monotone (R := R) <;> grind
+      . trivial
+  . induction h <;> grind
 
 lemma trans_is_refl_trans : x ~>+ y → x ~>* y :=
 by
-  intros red
-  induction red <;> aesop
+  intros x y red
+  induction red
+  . apply refl_trans_clos.step; trivial
+    constructor
+  . case step red _ ih => grind
 
 lemma refl_trans_is_trans_or_eq : x ~>* y → x = y ∨ x ~>+ y :=
 by
-  intros red
-  induction red <;> aesop
+  intros x y red
+  induction red <;> grind
 
-lemma refl_trans_step_is_trans : x ~> z → z ~>* y → x ~>+ y :=
+@[grind =>]
+lemma refl_trans_step_is_trans : ∀ x y z : A, x ~> z → z ~>* y → x ~>+ y :=
 by
   intros red_x_z red_z_y
   revert red_x_z x
-  induction red_z_y <;> aesop
+  induction red_z_y <;> grind
 
-@[simp]
-lemma sym_inv : R⁻¹ ⊆ sym_clos R := by aesop
+lemma sym_inv : ∀ (R : A → A → Prop), R⁻¹ ⊆ sym_clos R :=
+ by intros R x y red <;> grind
 
 def diverge_from (x : A) : Prop :=
   ∃ xs : Nat → A, xs 0 = x ∧ ∀ n, xs n ~> xs (n+1)
 
 def normalizes (x : A) : Prop := ¬ (diverge_from R x)
 
+@[grind]
 def normalizing : Prop := ∀ x : A, normalizes R x
 
+@[grind]
 def normal (x : A) : Prop := ¬ (∃ x', x ~> x')
 
 theorem normal_normalizing : normal R x → normalizes R x :=
@@ -164,16 +154,13 @@ by
   simp [normal]
   intros norm_x div_x
   match div_x with
-    | Exists.intro xs (And.intro zero_case incr_case) =>
-    apply norm_x (xs 1)
-    rw [←zero_case]
-    apply incr_case
+  | .intro _ _ => grind
 
 -- An alternate way to define normality.
 lemma normal_red : normal R x → x ~>* y → x = y :=
 by
-  intros norm red
-  cases red; trivial
+  intros x y norm red
+  cases red ; trivial
   case step y _ _ =>
   by_contra
   apply norm; exists y
@@ -186,20 +173,14 @@ theorem exists_iff : ∀ T (P Q : T → Prop),
         ∃ t, Q t :=
 by
   intros T P Q equiv ex_t
-  match ex_t with
-   | Exists.intro w h =>
-     exists w
-     simp [equiv]
-     exact h
+  cases ex_t; grind
 
-theorem iterate_left : ∀ {A} (f : A → A) (n : ℕ) (x : A), f^[n+1] x = f (f^[n] x) :=
-by
-  intros A f n
-  induction' n with n ihn
-  . simp [Nat.iterate]
-  . simp [Nat.add, Nat.iterate]
-    intros x
-    apply ihn
+#print Classical.axiomOfChoice
+
+theorem iterate_left {A} (f : A → A) (n : ℕ) (x : A) : f^[n+1] x = f (f^[n] x) := by
+  simp [Nat.iterate]
+  revert x
+  induction n <;> grind [Nat.iterate]
 
 -- This is gonna need a clever application of AC!
 lemma dependent_choice' : ∀ {A} (Q : A → A → Prop) (a : A),
@@ -214,13 +195,7 @@ by
   match choice_aut with
    | Exists.intro f h =>
        exists (λ n ↦ f^[n] a)
-       apply And.intro
-       . simp [Nat.iterate]
-       . intros n
-         simp
-         rw [iterate_left]
-         apply h
-
+       apply And.intro <;> grind [Nat.iterate, iterate_left]
 
 -- So tedious!
 lemma dependent_choice : ∀ {A}
@@ -230,10 +205,10 @@ lemma dependent_choice : ∀ {A}
   ∃ f : ℕ → A, ∀ n, Q (f n) (f (n+1)) :=
 by
   intros A Q inhab forall_exists_Q
-  have a : A := by match inhab with | Inhabited.mk a => exact a
+  have a : A := inhab.default
   have h := dependent_choice' _ a forall_exists_Q
-  match h with
-  | Exists.intro f h' =>
+  cases h
+  case intro f h' =>
     exists f
     apply h'.2
 
@@ -249,18 +224,12 @@ by
   by
     apply (@dependent_choice' {x : A // P x} (λ p q => P p ∧ Q p q) _)
     intros ap
-    match ap with
-    | Subtype.mk a' p =>
-      simp
-      apply And.intro
-      . exact p
-      . match (ex a' p) with
-        | Exists.intro b ⟨pb, qb⟩ => exists (Subtype.mk b pb)
+    cases ap
+    simp <;> grind
   match h with
-  | Exists.intro f ⟨zf, sf⟩ =>
+  | .intro f _ =>
     exists (λ n ↦ (f n).val)
-    simp; rw [zf]; simp
-    intros n; apply sf
+    grind
 
 -- This is the "real" def of normalization, or at least the
 -- one that's actually useful.
@@ -272,20 +241,12 @@ by
   intro h; apply norm
   have h' : ∃ f : ℕ → A, f 0 = x ∧ ∀ n, ¬ P (f n) ∧ f n ~> f (n+1) :=
   by
-    apply (dependent_choice''  (λ a ↦ ¬ P a))
-    . exact h
-    . intros a npa
-      apply Classical.byContradiction
-      simp; intros p
-      apply npa
-      apply IH; intros y ry
-      apply Classical.byContradiction; intros npy
-      apply (p y npy ry)
-
+    apply (dependent_choice''  (λ a ↦ ¬ P a)) <;> grind
   rw [diverge_from]
   match h' with
-    | Exists.intro xs ⟨P0, P1⟩ =>
-      exists xs; aesop
+  | Exists.intro xs _ =>
+    exists xs <;> grind
+
 
 lemma normalizing_ind : ∀ P : A → Prop,
   (∀ x, (∀ y, x ~> y → P y) → P x) → normalizing R → ∀ x, P x :=
@@ -303,34 +264,26 @@ by
   apply ih
   intros x red_norm div
   cases div
-  case a.intro f h =>
+  case _ f h =>
     apply red_norm
     . simp [← h.1]
       apply h.2 0
     . exists (λ n ↦ f (n+1))
-      simp
-      intros n; apply h.2
+      grind
 
--- Should be easy!
 lemma red_ref_trans_clos : ∀ x y z, x ~> y → refl_trans_clos R y z → refl_trans_clos R x z :=
 by
-  intros x y z red_x_y h
-  apply refl_trans_clos.step _ _ <;> trivial
+  intros x y z red_x_y h <;> grind
 
-lemma normalizing_normal : normalizes R x → ∃ y : A, x ~>* y ∧ normal R y
-:=
-by
-  apply normalizes_ind
-  intros x h
-  by_cases (∃ y, x ~> y)
-  . cases' h with y h'
-    cases' h _ h' with z h''
-    cases h''
-    exists z
-    constructor <;> aesop
-  . exists x; constructor
-    . constructor
-    . apply h
+lemma normalizing_normal (x : A) : normalizes R x → ∃ y : A, x ~>* y ∧ normal R y := by
+  revert x; apply normalizes_ind
+  intros x ih
+  by_cases h : (∃ y, x ~> y)
+  case pos =>
+    let ⟨y', red⟩ := h
+    let ⟨z, red, nf⟩ := (ih y' red)
+    exists z <;> grind
+  case neg => exists x <;> grind [normal]
 
 def joins : ∀ (_x _y : A), Prop := λ x y ↦ ∃ z : A, x ~>* z ∧ y ~>* z
 
@@ -354,79 +307,64 @@ def semi_confluent :=
 
 -- let's relate all of these
 
+@[grind →]
 lemma refl_trans_sym_refl_trans :
   ∀ R, refl_trans_clos R ⊆ refl_trans_sym_clos R :=
 by
   intros R x y red
-  induction red; constructor
-  apply refl_trans_sym_clos.trans <;> try trivial
-  aesop
+  induction red <;> grind
 
-@[simp]
-lemma wedge_inc_refl_sym_trans : wedge R ⊆ (. <~>* .) :=
-  by
-    intros x y wedge
-    cases' wedge with w h
-    cases' h with h1 h2
-    apply (refl_trans_sym_clos.trans _ w)
-    . apply refl_trans_sym_clos.inv
-      apply refl_trans_sym_refl_trans; trivial
-    . apply refl_trans_sym_refl_trans; trivial
+lemma wedge_inc_refl_sym_trans : wedge R ⊆ (. <~>* .) := by
+  intros x y; simp [wedge]; intros z
+  grind
 
 -- this one is trivial
 lemma church_rosser_implies_confluent : church_rosser R → confluent R :=
   by
     intros cr y z wedge
-    aesop
+    have h : y <~>* z := by grind [wedge_inc_refl_sym_trans]
+    apply cr
+    trivial
 
 -- quite useful manipulations
-lemma swap_joins : x ~>*.*<~ y → y ~>*.*<~ x :=
-by
-  intros joins
-  cases' joins with z h
-  cases h
-  exists z
+@[grind →]
+lemma swap_joins : ∀ x y, x ~>*.*<~ y → y ~>*.*<~ x := by
+  intros x y joins_x_y
+  grind [joins]
 
-lemma red_joins : x ~> y → y ~>*.*<~ z → x ~>*.*<~ z :=
-by
-  intros red_x_y joins_y_z
-  cases' joins_y_z with w h
-  cases h
-  exists w; aesop
+lemma red_joins : ∀ x y z, x ~> y → y ~>*.*<~ z → x ~>*.*<~ z := by
+  intros x y z red_x_y joins_y_z
+  grind [joins]
 
-@[simp]
-lemma reds_joins_left : x ~>* y → y ~>*.*<~ z → x ~>*.*<~ z :=
-by
-  intros red_x_y joins_y_z
-  induction' red_x_y with _ _ _ _ _ _ ih
-  . trivial
-  . apply red_joins
-    . trivial
-    . have h' := ih joins_y_z
-      trivial
+@[grind →]
+lemma reds_joins_left : ∀ x y z, x ~>* y → y ~>*.*<~ z → x ~>*.*<~ z := by
+  intros x y z red_x_y joins_y_z
+  induction red_x_y <;> grind [red_joins]
 
-@[simp]
-lemma reds_joins_right : x ~>* z → y ~>*.*<~ z → y ~>*.*<~ x :=
+@[grind →]
+lemma reds_joins_right : ∀ x y z, x ~>* z → y ~>*.*<~ z → y ~>*.*<~ x :=
 by
-  intros red_x_y joins_y_z
-  apply swap_joins
-  have joins_z_y := swap_joins _ joins_y_z
-  apply (reds_joins_left _) <;> trivial
+  intros x y z red_x_y joins_y_z
+  grind [swap_joins, reds_joins_left]
 
 -- this one is surprising, but not too tough.
-lemma semi_confluent_implies_confluent : semi_confluent R → confluent R :=
-by
-  intros semi x y wedge
-  cases' wedge with w h
-  cases' h with h1 h2
-  revert h2 y
-  induction' h1 with z x y y' red_x_y _red_y_y' ih <;> intros z red_x_z
-  . exists z; aesop
-  . have h := semi x y z red_x_y red_x_z
-    cases' h with z' h
-    cases' h with h1 h2
-    have ih := ih z' h1
-    apply reds_joins_right <;> trivial
+lemma semi_confluent_implies_confluent : semi_confluent R → confluent R := by
+  intros sc x y wdg
+  have ⟨t, h₁, h₂⟩ := wdg
+  revert wdg h₂ y
+  induction h₁
+  case _ w =>
+    intros y h₁ h₂
+    exists y <;> grind
+  case _ a b c h₃ h₄ ih =>
+    intros y wdg red_a_y
+    unfold semi_confluent at sc
+    have h₅ := sc a b y (by trivial) (by trivial)
+    have ⟨w, h₅, h₆⟩ := h₅
+    -- now we're in place for IH
+    have h₇ := ih w ⟨b, by trivial, by trivial⟩ (by trivial)
+    have ⟨w', h₇, h₈⟩ := h₇
+    grind
 
 
 -- This has a very simple "diagram proof":
@@ -447,16 +385,13 @@ by
   intros x y z red h
   revert y
   induction h
-  -- FIXME trivial case (eauto)
-  case a.refl _ =>
-    intros y _
-    exists y; aesop
-  case a.step a b c red_a_b _red_b_c ih =>
-    intros d red_a_d
-    have h := (sc _ _ _ red_a_b red_a_d)
-    cases' h with e h
-    cases' h with red_b_e red_d_e
-    apply red_joins <;> aesop
+  case _ _ =>
+    intros y _; exists y <;> grind
+  case _ a b c red_a_b red_b_c ih =>
+    intros y red_a_y
+    have ⟨w, h₁, h₂⟩ := sc a y b (by trivial) (by trivial)
+    have ⟨w', _, _⟩ := ih w h₂
+    exists w'; grind
 
 -- also trivial
 lemma confluent_implies_weakly_confluent : confluent R → weakly_confluent R :=
@@ -467,36 +402,22 @@ by
   . trivial
 
 -- this one is a little more work.
--- again, something clear from a diagram requires a tedious mechanical proof
-lemma confluent_implies_church_rosser : confluent R → church_rosser R :=
-by
-  intros confl
-  unfold church_rosser
-  intros x y red_x_y
-  induction red_x_y
-  case refl x =>
-    exists x ; repeat constructor
-  case base x y red_x_y =>
-    exists y; constructor <;> aesop
-  case trans x y z red_x_y red_y_z joins_x_y joins_y_z =>
-    cases' joins_x_y with w1 h1
-    cases' h1 with h11 h12
-    cases' joins_y_z with w2 h2
-    cases' h2 with h21 h22
-    have h' : wedge R w1 w2 := by
-      exists y
-    have h := confl w1 w2 h'
-    cases' h with w h''
-    exists w; cases' h'' with h3 h4
-    constructor <;> apply refl_trans_clos_transitive <;> trivial
-  case inv _ h =>
-    cases' h with w h'
-    cases' h' with h1 h2
-    exists w
+-- again, something clear from a diagram requires a somewhat tedious mechanical proof
+lemma confluent_implies_church_rosser : confluent R → church_rosser R := by
+  intros conf y z equiv_y_z
+  induction equiv_y_z
+  case trans a b c _ _ h₁ h₂ =>
+    have ⟨w₁, _, _⟩ := h₁
+    have ⟨w₂, _, _⟩ := h₂
+    have ⟨w₃, _, _⟩ := conf w₁ w₂ ⟨b, by trivial, by trivial⟩
+    exists w₃
+    grind [refl_trans_clos_transitive]
+  case inv a b _ h => grind
+  case refl a => exists a; grind
+  case base a b _ => exists b; grind
 
 -- Weakly confluent does not imply confluent in general!
-@[aesop safe [constructors, cases]]
-inductive X := | a | b | c | d
+inductive X where | a | b | c | d
 
 -- a <- b <=> c -> d
 
@@ -508,7 +429,7 @@ inductive X := | a | b | c | d
   | r_c_d : RX c d
  -/
 -- This one works great with simp and friends
-@[simp]
+@[grind]
 def RX : X → X → Prop :=
   open X in
   λ x y ↦
@@ -517,16 +438,8 @@ def RX : X → X → Prop :=
   ∨ (x = c ∧ y = b)
   ∨ (x = c ∧ y = d)
 
-lemma not_joins_a_d : ¬ joins RX X.a X.d :=
-by
-  intros h
-  cases' h with w h
-  cases' h with h1 h2
-  have eq_a : X.a = w := by
-    apply normal_red RX <;> aesop
-  have eq_d : X.d = w := by
-    apply normal_red RX <;> aesop
-  simp [← eq_a] at eq_d
+lemma not_joins_a_d : ¬ joins RX X.a X.d := by
+  grind [joins]
 
 
 lemma weakly_confluent_does_not_imply_confluent : ∃ (A : Type) (R : A → A → Prop),
@@ -535,11 +448,11 @@ by
   exists X, RX
   constructor
   . intros x y z r_x_y r_x_z
-    simp [*] at r_x_y
-    simp [*] at r_x_z
-    -- ugh this is tedious. Probably there's some nuclear tactic here
+    simp [RX] at r_x_y
+    simp [RX] at r_x_z
+    -- ugh this is tedious. Probably there's some nuclear tactic here (grind?)
     cases r_x_y <;> cases r_x_z <;> simp [*] at *
-    . exists X.a; repeat constructor
+    . exists X.a; grind
     . exists X.a; try constructor
       . constructor
       . simp [*]; constructor; simp [RX]
@@ -581,6 +494,10 @@ by
       . simp [RX]; right; trivial
       . constructor
 
+
+inductive close_below (P : A → Prop) : A → Prop where
+  | here : ∀ x, P x → close_below P x
+
 -- Sometimes it's easier to work with the transitive closure for WF induction.
 lemma normalizes_trans : normalizing R → normalizing (. ~>+ .) :=
 by
@@ -591,21 +508,8 @@ by
   have h : ∀ x, Q x :=
   by
     intros x
-    apply normalizing_ind R
-    . intros x ih'
-      constructor
-      . apply ih
-        intros y red_x_y
-        cases red_x_y
-        . apply (ih' _ _).1; trivial
-        . apply (ih' _ _).2 <;> trivial
-      -- FIXME: complete duplication!
-      . intros y red_x_y
-        cases red_x_y
-        . apply (ih' _ _).1; trivial
-        . apply (ih' _ _).2 <;> trivial
-    . trivial
-  intros x; apply (h x).1
+    apply normalizing_ind R <;> grind
+  grind
 
 -- When proving confluence, it's sometimes tedious to always handle the reflexive case.
 def confluent' := ∀ x y z : A, x ~>+ y → x ~>+ z → y ~>*.*<~ z
@@ -619,8 +523,8 @@ by
   cases h
   . case a.inl h =>
     simp [← h]
-    exists y; aesop
-  . apply conf' <;> aesop
+    exists y <;> grind
+  . apply conf' x y z <;> grind
 
 -- but if R is normalizing...
 theorem newmans_lemma : normalizing R → weakly_confluent R → confluent R :=
@@ -639,248 +543,22 @@ by
   (apply h <;> try trivial) <;> try apply norm_trans
   clear h
   intros x ih y z wedge
-  -- FIXME: this is horrid
   cases wedge.1
-  . exists z; aesop
+  . exists z; grind
   . case a.step y' red_x_y' red_y'_y =>
     cases wedge.2
-    . exists y; aesop
+    . exists y; grind
     . case step z' red_x_z' red_z'_z =>
       -- finally use weak confluence
-      have join1 := weak _ _ _ red_x_y' red_x_z'
-      cases' join1 with w h'
-      have join2 : y ~>*.*<~ w :=
-      by
-        apply ih
-        . apply trans_clos.base
-          apply red_x_y'
-        . aesop
-      have join3 : z ~>*.*<~ w :=
-      by
-        apply ih
-        . apply trans_clos.base
-          apply red_x_z'
-        . aesop
-      cases' join2 with w1 h1
-      cases' join3 with w2 h2
-      have red_x_w : x ~>+ w :=
-        by
-          apply refl_trans_step_is_trans
-          . apply red_x_z'
-          . apply h'.2
-      have join4 : w1 ~>*.*<~ w2 :=
-      by
-        apply ih
-        . apply red_x_w
-        . aesop
-       /- ih w red_x_w w1 w2
-        (And.intro h1.2 h2.1) -/
-      cases' join4 with omega h3
-      exists omega; constructor
-      . apply refl_trans_clos_transitive
-        . apply h1.1
-        . apply h3.1
-      . apply refl_trans_clos_transitive
-        . apply h2.1
-        . apply h3.2
+      have ⟨w₁, _, _⟩ := weak _ _ _ red_x_y' red_x_z'
+      have ⟨w₂, _, _⟩ := ih y' (by grind) y w₁ (by trivial)
+      have ⟨w₃, _ , _⟩ := ih z' (by grind) z w₁ (by trivial)
+      have h : trans_clos R x w₁ := by grind
+      have ⟨w₄, _, _⟩ := ih w₁ h w₁ w₂ (by grind)
+      grind
 
 lemma confluent_unique_nf : confluent R →
-  ∀ x y z, x ~>* y → x ~>*z → normal R y → normal R z → y = z :=
-by
-  intros conf x y z red_x_y red_x_z norm_y norm_z
-  have wdg_y_z : wedge _ y z := Exists.intro x ⟨ red_x_y, red_x_z ⟩
-  have h : y ~>*.*<~ z := conf _ _ wdg_y_z
-  cases' h with w h
-  cases h
-  have eq_y_w : y = w := by apply normal_red <;> trivial
-  have eq_z_w : z = w := by  apply normal_red <;> trivial
-  simp [*]
-
-variable (S : A → A → Prop)
-
-infix:50 " ++> " => S
-infix:60 " ++>* " => refl_trans_clos S
-
-lemma inc_refl_trans_eq : (. ~> .) ⊆ (. ++> .) → (. ++> .) ⊆ (. ~>* .) → (. ++>* .) ≅ (. ~>* .) :=
-by
-  simp
-  intros r_sub_s s_sub_r_star x y; constructor <;> intros steps
-  . induction steps
-    . constructor
-    . apply refl_trans_clos_transitive
-      . apply s_sub_r_star; trivial
-      . trivial
-  . induction steps
-    . constructor
-    . aesop
-
-lemma equiv_conf : S ≅ R → confluent S → confluent R :=
-by
-  simp
-  intros equiv
-  simp [confluent, wedge, joins]
-  intros h y z x red_x_y red_y_z
-  have h1 : refl_trans_clos S x y := by
-    apply refl_trans_clos_monotone
-    intros _ _; apply (equiv _ _).2
-    trivial
-  have h2 : refl_trans_clos S x z := by
-    apply refl_trans_clos_monotone
-    intros _ _; apply (equiv _ _).2
-    trivial
-  cases' (h y z x h1 h2) with w h
-  cases' h with h1 h2
-  exists w
-  constructor <;> apply refl_trans_clos_monotone
-  . intros x y; apply (equiv _ _).1
-  . trivial
-  . intros x y; apply (equiv _ _).1
-  . trivial
-
-
-lemma trans_clos_idempotent : ∀ R, refl_trans_clos (refl_trans_clos R) ≅ refl_trans_clos R :=
-by
-  simp; intros R x y
-  constructor <;> intros steps <;> induction' steps with z a b c red_a_c _red_b_c ih
-  . constructor
-  . apply refl_trans_clos_transitive <;> trivial
-  . constructor
-  . apply refl_trans_clos.step
-    . apply refl_trans_clos.step; trivial
-      constructor
-    . trivial
-
-@[simp]
-lemma conf_trans_clos : confluent (refl_trans_clos R) ↔ confluent R :=
-by
-  simp [confluent, joins, wedge]; constructor
-  . intros h y z x red_x_y red_x_z
-    have h1 : refl_trans_clos (refl_trans_clos R) x y :=
-      by
-        apply (trans_clos_idempotent _ _ _).2; trivial
-    have h2 : refl_trans_clos (refl_trans_clos R) x z :=
-      by
-        apply (trans_clos_idempotent _ _ _).2; trivial
-    cases' (h _ _ _ h1 h2) with w h
-    cases' h with h1 h2
-    exists w; constructor <;> apply (trans_clos_idempotent _ _ _).1 <;> trivial
-  . intros h y z x red_x_y red_x_z
-    have h1 : refl_trans_clos R x y :=
-      by
-        apply (trans_clos_idempotent _ _ _).1; trivial
-    have h2 : refl_trans_clos R x z :=
-      by
-        apply (trans_clos_idempotent _ _ _).1; trivial
-    cases' (h _ _ _ h1 h2) with w h
-    cases' h with h1 h2
-    exists w; constructor <;> apply (trans_clos_idempotent _ _ _).2 <;> trivial
-
-lemma inc_refl_trans_confl : (. ~> .) ⊆ (. ++> .) → (. ++> .) ⊆ (. ~>* .) → confluent S → confluent R :=
-by
-  simp
-  intros
-  apply (conf_trans_clos _).1
-  apply equiv_conf
-  . apply inc_refl_trans_eq; simp
-    . trivial
-    . simp; trivial
-  . aesop
-
-lemma refl_is_refl_trans : x ~>= y → x ~>* y := by aesop
-
-def strongly_confluent := ∀ x y z, x ~> y → x ~> z → ∃ w, y ~>* w ∧ z ~>= w
-
-lemma strong_confluent_implies_confluent : strongly_confluent R → confluent R :=
-by
-  intros str_conf
-  apply semi_confluent_implies_confluent
-  unfold semi_confluent
-  intros x y z red_x_y red_x_z
-  revert red_x_y y
-  induction' red_x_z with a x x₂ xₙ red_x_x2 red_x2_xn ih
-  . intros y _; exists y; aesop
-  . intros y red_x_y
-    cases' (str_conf _ _ _ red_x_y red_x_x2) with y₂ h
-    cases h.2
-    . exists xₙ; constructor
-      . apply refl_trans_clos_transitive
-        . apply h.1
-        . trivial
-      . constructor
-    . have ih : y₂ ~>*.*<~ xₙ :=
-        by apply ih; trivial
-      cases' ih with w _
-      exists w; constructor
-      . apply refl_trans_clos_transitive
-        . apply h.1
-        . aesop
-      . aesop
-
-infix:50 " ~>₁ " => R
-infix:50 " ~>₂ " => S
-infix:50 " ~>₁* " => refl_trans_clos R
-infix:50 " ~>₂* " => refl_trans_clos S
-infix:200 " ∪ " => λ R S x y ↦ R x y ∨ S x y
-
--- This would look a little nicer with some notation.
--- but the idea is that you can "re-order" steps so that
--- the 1 (resp 2) steps come first.
--- Note that this is a very strong condition!
--- It basically means that ~>₁ steps can "ignore" ~>₂
--- steps entirely and vice versa.
-def commute := ∀ x y z, x ~>₁* y → x ~>₂* z →
-               ∃ w, y ~>₂* w ∧ z ~>₁* w
-
-infix:200 " ∘ " => λ R S x y ↦ ∃ z, R x z ∧ S z y
-
-lemma refl_trans_union_left : (. ~>₁* .) ⊆ refl_trans_clos (R∪S) :=
-by
-  simp; intros x y red_x_y
-  induction red_x_y <;> aesop
-
-lemma refl_trans_union_right : (. ~>₂* .) ⊆ refl_trans_clos (R∪S) :=
-by
-  simp; intros x y red_x_y
-  induction red_x_y <;> aesop
-
--- Ok this means we can break down confluence into pieces.
-lemma commuting_confluence_implies_confluence :
-  commute R S → confluent R → confluent S → confluent (R ∪ S)
-:=
-  by --let's apply some of our machinery
-    intros commut_r_s conf_r conf_s
-    apply inc_refl_trans_confl
-    . have h : R ∪ S ⊆ (. ~>₁* .) ∘ (. ~>₂* .) :=
-        by
-          simp; intros x y red_or
-          cases red_or
-          . exists y; aesop
-          . exists x; aesop
-      apply h
-    . simp
-      intros x y z red_x_z red_z_y
-      apply refl_trans_clos_transitive
-      . apply refl_trans_union_left
-        trivial
-      . apply refl_trans_union_right; trivial
-    . apply diamond_implies_confluent
-      simp [diamond]
-      intros x y z y1 red_x_y1 red_y1_y
-      intros z1 red_x_z1 red_z1_z
-      have wedge_y1_z1 : wedge R y1 z1 :=
-        by exists x
-      have join_y1_z1 := conf_r _ _ wedge_y1_z1
-      cases' join_y1_z1 with w h
-      clear wedge_y1_z1
-      have h1 := commut_r_s _ _ _ h.1 red_y1_y
-      have h2 := commut_r_s _ _ _ h.2 red_z1_z
-      cases' h1 with w1 h1
-      cases' h2 with w2 h2
-      have wedge_w1_w2 : wedge S w1 w2 :=
-        by exists w; aesop
-      have join_w1_w2 : joins S w1 w2 := by apply conf_s; trivial
-      cases' join_w1_w2 with omega h3
-      clear wedge_w1_w2
-      exists omega; constructor
-      . exists w1; aesop
-      . exists w2; aesop
+  ∀ x y z, x ~>* y → x ~>*z → normal R y → normal R z → y = z := by
+  intros conf x y z red_x_y red_x_z nf_y nf_z
+  have ⟨w, h₁, h₂⟩ := conf y z ⟨x, by trivial, by trivial⟩
+  grind
