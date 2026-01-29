@@ -1,5 +1,5 @@
 import Mathlib.Logic.Function.Iterate
-
+import Aesop
 
 section variable {A : Type}
 
@@ -43,29 +43,28 @@ set_option quotPrecheck false
 
 infix:60 " ⊆ " => (λ (R R' : A → A → Prop) ↦ ∀ x y, R x y → R' x y)
 infix:60 " ≅ " => (λ (R R' : A → A → Prop) ↦ ∀ x y, R x y ↔ R' x y)
-postfix:100 " ⁻¹ " => (λ (R : A → A → Prop) ↦ λ x y ↦ R y x)
+postfix:100 " ⁻¹ " => (λ (R : A → A → Prop) x y ↦ R y x)
 infixl:50 " ~> " => R
-
+infixl:50 " ~>= "   => refl_clos R
 infixl:50 " ~>+ "   => trans_clos R
 infixl:50 " ~>* "   => refl_trans_clos R
 infixl:50 " <~>* "  => refl_trans_sym_clos R
 
-lemma both_inclusions : ∀ (R R' : A → A → Prop),
-  R ⊆ R' → R' ⊆ R → R ≅ R' :=
-  by
-    intros R R' le_1 le_2 x y
-    constructor
-    . apply le_1
-    . apply le_2
+lemma both_inclusions : R ⊆ R' → R' ⊆ R → R ≅ R' := by aesop
 
-lemma trans_clos_monotone : ∀ (R R' : A → A → Prop),
- R ⊆ R' →  trans_clos R ⊆ trans_clos R' :=
+lemma equiv_left : R ≅ R' → R ⊆ R' := by aesop
+
+lemma equiv_right : R ≅ R' → R' ⊆ R := by aesop
+
+
+@[simp]
+lemma trans_clos_monotone : R ⊆ R' →  trans_clos R ⊆ trans_clos R' :=
   by
     intros R R' le x y tr
     induction tr <;> grind
 
-lemma sym_clos_monotone : ∀ (R R' : A → A → Prop),
- R ⊆ R' →  sym_clos R ⊆ sym_clos R' :=
+@[simp]
+lemma sym_clos_monotone : R ⊆ R' →  sym_clos R ⊆ sym_clos R' :=
    by
     intros R R' le x y sym
     induction sym <;> grind
@@ -100,6 +99,7 @@ lemma refl_trans_is_trans_refl :
     case base a b h => grind
     case step a b c h₁ h₂ ih => grind
 
+@[simp]
 lemma refl_sym_is_sym_refl :
   refl_clos (sym_clos R) ≅ sym_clos (refl_clos R)
   := by intros x y <;> grind
@@ -115,7 +115,7 @@ lemma refl_trans_sym_is_trans_sym_refl :
       . trivial
   . induction h <;> grind
 
-lemma trans_is_refl_trans : ∀ x y : A, x ~>+ y → x ~>* y :=
+lemma trans_is_refl_trans : x ~>+ y → x ~>* y :=
 by
   intros x y red
   induction red
@@ -123,7 +123,7 @@ by
     constructor
   . case step red _ ih => grind
 
-lemma refl_trans_is_trans_or_eq : ∀ x y : A, x ~>* y → x = y ∨ x ~>+ y :=
+lemma refl_trans_is_trans_or_eq : x ~>* y → x = y ∨ x ~>+ y :=
 by
   intros x y red
   induction red <;> grind
@@ -131,7 +131,7 @@ by
 @[grind =>]
 lemma refl_trans_step_is_trans : ∀ x y z : A, x ~> z → z ~>* y → x ~>+ y :=
 by
-  intros x y z red_x_z red_z_y
+  intros red_x_z red_z_y
   revert red_x_z x
   induction red_z_y <;> grind
 
@@ -149,7 +149,7 @@ def normalizing : Prop := ∀ x : A, normalizes R x
 @[grind]
 def normal (x : A) : Prop := ¬ (∃ x', x ~> x')
 
-theorem normal_normalizing (x : A) : normal R x → normalizes R x :=
+theorem normal_normalizing : normal R x → normalizes R x :=
 by
   simp [normal]
   intros norm_x div_x
@@ -157,7 +157,7 @@ by
   | .intro _ _ => grind
 
 -- An alternate way to define normality.
-lemma normal_red : ∀ x y, normal R x → x ~>* y → x = y :=
+lemma normal_red : normal R x → x ~>* y → x = y :=
 by
   intros x y norm red
   cases red ; trivial
@@ -511,7 +511,7 @@ by
     apply normalizing_ind R <;> grind
   grind
 
--- When proving confluence, it's actually tedious to always handle the reflexive case.
+-- When proving confluence, it's sometimes tedious to always handle the reflexive case.
 def confluent' := ∀ x y z : A, x ~>+ y → x ~>+ z → y ~>*.*<~ z
 
 lemma confluent'_implies_confluent : confluent' R → confluent R :=
@@ -519,7 +519,7 @@ by
   intros conf'
   apply semi_confluent_implies_confluent
   intros x y z red_x_y red_x_z
-  have h := refl_trans_is_trans_or_eq _ _ _ red_x_z
+  have h := refl_trans_is_trans_or_eq _ red_x_z
   cases h
   . case a.inl h =>
     simp [← h]
