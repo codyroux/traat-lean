@@ -2,15 +2,15 @@ import Mathlib.Logic.Function.Iterate
 import Mathlib.Order.Basic
 
 @[grind]
-class Rel (A : Type) where
-  related : A → A → Prop
+class Red (A : Type) where
+  reduces : A → A → Prop
 
-open Rel
+open Red
 
-instance invRel {A : Type} : Inv (A → A → Prop) where
+instance invRed {A : Type} : Inv (A → A → Prop) where
   inv R x y := R y x
 
-infixl:50 " ~> " => related
+infixl:50 " ~> " => reduces
 
 @[grind]
 inductive trans_clos {A : Type} (R : A → A → Prop) : A → A → Prop
@@ -43,15 +43,15 @@ inductive refl_trans_sym_clos {A : Type} (R : A → A → Prop) : A → A → Pr
                refl_trans_sym_clos R a b
 
 @[simp]
-def refl_clos_red [R : Rel A] := refl_clos R.related
+def refl_clos_red [R : Red A] := refl_clos R.reduces
 @[simp]
-def sym_clos_red [R : Rel A] := sym_clos R.related
+def sym_clos_red [R : Red A] := sym_clos R.reduces
 @[simp]
-def trans_clos_red [R : Rel A] := trans_clos R.related
+def trans_clos_red [R : Red A] := trans_clos R.reduces
 @[simp]
-def refl_trans_clos_red [R : Rel A] := refl_trans_clos R.related
+def refl_trans_clos_red [R : Red A] := refl_trans_clos R.reduces
 @[simp]
-def refl_trans_sym_clos_red [R : Rel A] := refl_trans_sym_clos R.related
+def refl_trans_sym_clos_red [R : Red A] := refl_trans_sym_clos R.reduces
 
 infixl:50 " ~>= "   => refl_clos_red
 infixl:50 " <~> "   => sym_clos_red
@@ -60,11 +60,11 @@ infixl:50 " ~>* "   => refl_trans_clos_red
 infixl:50 " <~>* "  => refl_trans_sym_clos_red
 
 @[simp]
-lemma incRel {A : Type} (R R' : A → A → Prop) (x y : A) : R ≤ R' → R x y → R' x y := by
+lemma incRed {A : Type} (R R' : A → A → Prop) (x y : A) : R ≤ R' → R x y → R' x y := by
   simp [LE.le]; grind
 
 @[simp, grind .]
-lemma incRelRelated {A} {R : Rel A} {R' : Rel A} x y : R.related ≤ R'.related → related (self:=R) x y → related (self:=R') x y := by
+lemma incRelRelated {A} {R : Red A} {R' : Red A} x y : R.reduces ≤ R'.reduces → reduces (self:=R) x y → reduces (self:=R') x y := by
   simp [LE.le]; grind
 
 @[simp, grind .]
@@ -97,13 +97,13 @@ lemma refl_clos_monotone {A : Type} (R R' : A → A → Prop)
     intros le x y re
     induction re <;> simp [LE.le] at * <;> grind
 
-lemma sym_clos_sym [R : Rel A] (x y : A)
+lemma sym_clos_sym [R : Red A] (x y : A)
   (h : x <~> y)
   : y <~> x := by
   simp at *
   induction h <;> grind
 
-lemma trans_clos_transitive [R : Rel A] (x y z : A)
+lemma trans_clos_transitive [R : Red A] (x y z : A)
   (h₁ : x ~>+ y)
   (h₂ : y ~>+ z)
   : x ~>+ z := by
@@ -112,7 +112,7 @@ lemma trans_clos_transitive [R : Rel A] (x y z : A)
   induction h₁ <;> grind
 
 @[grind →]
-lemma refl_trans_clos_transitive [R : Rel A] (x y z : A)
+lemma refl_trans_clos_transitive [R : Red A] (x y z : A)
   (h₁ : x ~>* y) (h₂ : y ~>* z) : x ~>* z := by
   revert h₂ z
   simp at *
@@ -148,7 +148,7 @@ lemma refl_trans_sym_is_trans_sym_refl (R : A → A → Prop) :
       . trivial
   . induction h <;> grind
 
-lemma trans_is_refl_trans [R : Rel A] {x y : A} : x ~>+ y → x ~>* y :=
+lemma trans_is_refl_trans [R : Red A] {x y : A} : x ~>+ y → x ~>* y :=
 by
   simp
   intros red
@@ -157,14 +157,14 @@ by
     constructor
   . case step red _ ih => grind
 
-lemma refl_trans_is_trans_or_eq [R : Rel A] {x y : A} : x ~>* y → x = y ∨ x ~>+ y :=
+lemma refl_trans_is_trans_or_eq [R : Red A] {x y : A} : x ~>* y → x = y ∨ x ~>+ y :=
 by
   simp
   intros red
   induction red <;> grind
 
 @[grind =>]
-lemma refl_trans_step_is_trans [R : Rel A] : ∀ x y z : A, x ~> z → z ~>* y → x ~>+ y :=
+lemma refl_trans_step_is_trans [R : Red A] : ∀ x y z : A, x ~> z → z ~>* y → x ~>+ y :=
 by
   simp
   intros x y z red_x_z red_z_y
@@ -174,18 +174,18 @@ by
 lemma sym_inv (R : A → A → Prop) : R⁻¹ ≤ sym_clos R :=
  by intros x y; simp [Inv.inv]; grind
 
-def diverge_from [R : Rel A] (x : A) : Prop :=
+def diverge_from [R : Red A] (x : A) : Prop :=
   ∃ xs : Nat → A, xs 0 = x ∧ ∀ n, xs n ~> xs (n+1)
 
-def normalizes [R : Rel A] (x : A) : Prop := ¬ (diverge_from x)
+def normalizes [R : Red A] (x : A) : Prop := ¬ (diverge_from x)
 
 @[grind]
-def normalizing (R : Rel A) : Prop := ∀ x : A, normalizes x
+def normalizing (R : Red A) : Prop := ∀ x : A, normalizes x
 
 @[grind]
-def normal [R : Rel A] (x : A) : Prop := ¬ (∃ x', x ~> x')
+def normal [R : Red A] (x : A) : Prop := ¬ (∃ x', x ~> x')
 
-theorem normal_normalizing [R : Rel A] {x : A} : normal x → normalizes x :=
+theorem normal_normalizing [R : Red A] {x : A} : normal x → normalizes x :=
 by
   simp [normal]
   intros norm_x div_x
@@ -193,7 +193,7 @@ by
   | .intro _ _ => grind
 
 -- An alternate way to define normality.
-lemma normal_red [R : Rel A] {x y : A} : normal x → x ~>* y → x = y :=
+lemma normal_red [R : Red A] {x y : A} : normal x → x ~>* y → x = y :=
 by
   intros norm red
   cases red ; trivial
@@ -269,7 +269,7 @@ by
 
 -- This is the "real" def of normalization, or at least the
 -- one that's actually useful.
-lemma normalizes_ind [R : Rel A] : ∀ P : A → Prop,
+lemma normalizes_ind [R : Red A] : ∀ P : A → Prop,
   (∀ x, (∀ y, x ~> y → P y) → P x) → ∀ x, normalizes x → P x :=
 by
   intros P IH x norm
@@ -284,7 +284,7 @@ by
     exists xs; grind
 
 
-lemma normalizing_ind [R : Rel A] : ∀ P : A → Prop,
+lemma normalizing_ind [R : Red A] : ∀ P : A → Prop,
   (∀ x, (∀ y, x ~> y → P y) → P x) → normalizing R → ∀ x, P x :=
 by
   intros P IH norm x
@@ -293,7 +293,7 @@ by
   . apply norm
 
 
-lemma ind_normalizing [R : Rel A] :
+lemma ind_normalizing [R : Red A] :
    (∀ P : A → Prop, (∀ x, (∀ y, x ~> y → P y) → P x) → ∀ x, P x) → normalizing R :=
 by
   intros ih x
@@ -308,11 +308,11 @@ by
       grind
 
 @[grind .]
-lemma red_ref_trans_clos [R : Rel A] : ∀ x y z : A, x ~> y → y ~>* z → x ~>* z :=
+lemma red_ref_trans_clos [R : Red A] : ∀ x y z : A, x ~> y → y ~>* z → x ~>* z :=
 by
   simp; intros x y z red_x_y h ; grind
 
-lemma normalizing_normal [R : Rel A] (x : A) : normalizes x → ∃ y : A, x ~>* y ∧ normal y := by
+lemma normalizing_normal [R : Red A] (x : A) : normalizes x → ∃ y : A, x ~>* y ∧ normal y := by
   revert x; apply normalizes_ind
   intros x ih
   by_cases h : (∃ y, x ~> y)
@@ -322,24 +322,24 @@ lemma normalizing_normal [R : Rel A] (x : A) : normalizes x → ∃ y : A, x ~>*
     exists z ; grind
   case neg => exists x ; simp at *; grind [normal]
 
-def joins [R : Rel A] := λ x y ↦ ∃ z : A, x ~>* z ∧ y ~>* z
+def joins [R : Red A] := λ x y ↦ ∃ z : A, x ~>* z ∧ y ~>* z
 
-def wedge [R : Rel A] : A → A → Prop := λ (u v : A) ↦ ∃ t, t ~>* u ∧ t ~>* v
+def wedge [R : Red A] : A → A → Prop := λ (u v : A) ↦ ∃ t, t ~>* u ∧ t ~>* v
 
 infix:50 " ~>*.*<~ " => joins
 infix:50 " *<~.~>* " => wedge
 
-def church_rosser (R : Rel A) := ∀ (x y : A), x <~>* y → x ~>*.*<~ y
+def church_rosser (R : Red A) := ∀ (x y : A), x <~>* y → x ~>*.*<~ y
 
-def confluent (R : Rel A) := ∀ (y z : A), y *<~.~>* z → y ~>*.*<~ z
+def confluent (R : Red A) := ∀ (y z : A), y *<~.~>* z → y ~>*.*<~ z
 
-def diamond (R : Rel A) :=
+def diamond (R : Red A) :=
   ∀ x y z : A, x ~> y → x ~> z → ∃ w, y ~> w ∧ z ~> w
 
-def weakly_confluent (R : Rel A) :=
+def weakly_confluent (R : Red A) :=
   ∀ x y z : A, x ~> y → x ~> z → y ~>*.*<~ z
 
-def semi_confluent (R : Rel A) :=
+def semi_confluent (R : Red A) :=
   ∀ x y z : A, x ~> y → x ~>* z → y ~>*.*<~ z
 
 -- let's relate all of these
@@ -352,14 +352,14 @@ by
   intros x y red
   induction red <;> grind
 
-lemma wedge_inc_refl_sym_trans [R : Rel A] : wedge (R:=R) ≤ refl_trans_sym_clos R.related := by
+lemma wedge_inc_refl_sym_trans [R : Red A] : wedge (R:=R) ≤ refl_trans_sym_clos R.reduces := by
   intros x y; simp [wedge]; intros z
   intros; apply refl_trans_sym_clos.trans x z y
   case _ => apply refl_trans_sym_clos.inv; apply refl_trans_sym_refl_trans; trivial
   case _ => apply refl_trans_sym_refl_trans; trivial
 
 -- this one is trivial
-lemma church_rosser_implies_confluent [R : Rel A] : church_rosser R → confluent R :=
+lemma church_rosser_implies_confluent [R : Red A] : church_rosser R → confluent R :=
   by
     intros cr y z wedge
     have h : y <~>* z := by apply wedge_inc_refl_sym_trans; trivial
@@ -368,27 +368,27 @@ lemma church_rosser_implies_confluent [R : Rel A] : church_rosser R → confluen
 
 -- quite useful manipulations
 @[grind →]
-lemma swap_joins [R : Rel A] : ∀ x y : A, x ~>*.*<~ y → y ~>*.*<~ x := by
+lemma swap_joins [R : Red A] : ∀ x y : A, x ~>*.*<~ y → y ~>*.*<~ x := by
   intros x y joins_x_y
   grind [joins]
 
-lemma red_joins [R : Rel A] : ∀ x y z : A, x ~> y → y ~>*.*<~ z → x ~>*.*<~ z := by
+lemma red_joins [R : Red A] : ∀ x y z : A, x ~> y → y ~>*.*<~ z → x ~>*.*<~ z := by
   intros x y z red_x_y joins_y_z
   grind [joins]
 
 @[grind →]
-lemma reds_joins_left [R : Rel A] : ∀ x y z : A, x ~>* y → y ~>*.*<~ z → x ~>*.*<~ z := by
+lemma reds_joins_left [R : Red A] : ∀ x y z : A, x ~>* y → y ~>*.*<~ z → x ~>*.*<~ z := by
   intros x y z red_x_y joins_y_z
   induction red_x_y <;> grind [red_joins]
 
 @[grind →]
-lemma reds_joins_right [R : Rel A] : ∀ x y z : A, x ~>* z → y ~>*.*<~ z → y ~>*.*<~ x :=
+lemma reds_joins_right [R : Red A] : ∀ x y z : A, x ~>* z → y ~>*.*<~ z → y ~>*.*<~ x :=
 by
   intros x y z red_x_y joins_y_z
   grind [swap_joins, reds_joins_left]
 
 -- this one is surprising, but not too tough.
-lemma semi_confluent_implies_confluent [R : Rel A] : semi_confluent (R:=R) → confluent (R:=R) := by
+lemma semi_confluent_implies_confluent [R : Red A] : semi_confluent (R:=R) → confluent (R:=R) := by
   intros sc x y wdg
   have ⟨t, h₁, h₂⟩ := wdg
   revert wdg h₂ y
@@ -478,13 +478,13 @@ def RX : X → X → Prop :=
   ∨ (x = c ∧ y = b)
   ∨ (x = c ∧ y = d)
 
-instance redX : Rel X := ⟨RX⟩
+instance redX : Red X := ⟨RX⟩
 
 lemma not_joins_a_d : ¬ joins X.a X.d := by
-  simp [joins, related]; grind
+  simp [joins, reduces]; grind
 
 
-lemma weakly_confluent_does_not_imply_confluent : ∃ (A : Type) (R : Rel A),
+lemma weakly_confluent_does_not_imply_confluent : ∃ (A : Type) (R : Red A),
 weakly_confluent R ∧ ¬ confluent R :=
 by
   exists X, ⟨RX⟩
@@ -539,10 +539,10 @@ inductive close_below (P : A → Prop) : A → Prop where
   | here : ∀ x, P x → close_below P x
 
 -- Sometimes it's easier to work with the transitive closure for WF induction.
-lemma normalizes_trans [R : Rel A] : normalizing R → normalizing (R := ⟨trans_clos R.related⟩) :=
+lemma normalizes_trans [R : Red A] : normalizing R → normalizing (R := ⟨trans_clos R.reduces⟩) :=
 by
   intros norm
-  apply ind_normalizing (R := ⟨trans_clos (R.related)⟩)
+  apply ind_normalizing (R := ⟨trans_clos (R.reduces)⟩)
   intros P ih
   let Q := λ x ↦ P x ∧ ∀ y, x ~>+ y → P y
   have h : ∀ x, Q x :=
@@ -554,7 +554,7 @@ by
   grind
 
 -- When proving confluence, it's sometimes tedious to always handle the reflexive case.
-def confluent' [R : Rel A] := ∀ x y z : A, x ~>+ y → x ~>+ z → y ~>*.*<~ z
+def confluent' [R : Red A] := ∀ x y z : A, x ~>+ y → x ~>+ z → y ~>*.*<~ z
 
 lemma confluent'_implies_confluent : confluent' (R:=R) → confluent R :=
 by
@@ -579,7 +579,7 @@ by
   revert h z y
   have norm_trans := normalizes_trans norm_R
   have h :=
-    normalizes_ind (R := ⟨trans_clos R.related⟩)
+    normalizes_ind (R := ⟨trans_clos R.reduces⟩)
     (λ x ↦ ∀ y z, x ~>* y ∧ x ~>* z → y ~>*.*<~ z)
   intros y z wedge
   (apply h <;> try trivial) <;> try apply norm_trans
@@ -599,8 +599,14 @@ by
       have ⟨w₄, _, _⟩ := ih w₁ h w₁ w₂ (by simp at *; grind)
       grind
 
-lemma confluent_unique_nf [R : Rel A] : confluent R →
+lemma confluent_unique_nf [R : Red A] : confluent R →
   ∀ x y z : A, x ~>* y → x ~>* z → normal y → normal z → y = z := by
   intros conf x y z red_x_y red_x_z nf_y nf_z
   have ⟨w, h₁, h₂⟩ := conf y z ⟨x, by trivial, by trivial⟩
   simp at *; grind
+
+section Commuting
+
+
+
+end Commuting
