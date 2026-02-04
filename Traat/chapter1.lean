@@ -85,6 +85,14 @@ lemma trans_clos_monotone {A : Type} (R R' : A → A → Prop) : R ≤ R' →
   intros le x y tr
   induction tr <;> simp [LE.le] at * <;> grind
 
+
+@[simp]
+lemma refl_trans_clos_monotone {A : Type} (R R' : A → A → Prop) : R ≤ R' →
+  refl_trans_clos R ≤ refl_trans_clos R' := by
+  intros le x y tr
+  induction tr <;> simp [LE.le] at * <;> grind
+
+
 @[simp]
 lemma sym_clos_monotone {A : Type} (R R' : A → A → Prop) : R ≤ R' → sym_clos R ≤ sym_clos R' := by
   intros le x y sym
@@ -111,11 +119,27 @@ lemma trans_clos_transitive [R : Red A] (x y z : A)
   simp at *
   induction h₁ <;> grind
 
+@[grind <=]
+lemma trans_clos_transitive' (R : A → A → Prop) (x y z : A)
+  (h₁ : trans_clos R x y)
+  (h₂ : trans_clos R y z)
+  : trans_clos R x z := by
+  revert h₂ z
+  induction h₁ <;> grind
+
 @[grind →]
 lemma refl_trans_clos_transitive [R : Red A] (x y z : A)
   (h₁ : x ~>* y) (h₂ : y ~>* z) : x ~>* z := by
   revert h₂ z
   simp at *
+  induction h₁ <;> grind
+
+@[grind <=]
+lemma refl_trans_clos_transitive' (R : A → A → Prop) (x y z : A)
+  (h₁ : refl_trans_clos R x y)
+  (h₂ : refl_trans_clos R y z)
+  : refl_trans_clos R x z := by
+  revert h₂ z
   induction h₁ <;> grind
 
 
@@ -131,6 +155,25 @@ lemma refl_trans_is_trans_refl (R : A → A → Prop) :
   . induction h
     case base a b h => grind
     case step a b c h₁ h₂ ih => grind
+
+
+lemma trans_idem (R : A → A → Prop) :
+  trans_clos (trans_clos R) = trans_clos R := by
+    funext x y; apply propext; constructor
+    case _ =>
+      intros h; induction h
+      case _ => grind
+      case _ a b c h₁ h₂ h₃ =>
+        -- This is still awkward because of the type class stuff
+        have h := @trans_clos_transitive _ ⟨R⟩
+        apply h a b c <;> simp <;> grind
+    case _ =>
+      intros h; induction h
+      case _ => grind
+      case _ a b c h₁ h₂ h₃ =>
+        have h := @trans_clos_transitive _ ⟨trans_clos R⟩
+        apply h a b c <;> simp <;> grind
+
 
 @[simp]
 lemma refl_sym_is_sym_refl (R : A → A → Prop) :
@@ -607,6 +650,84 @@ lemma confluent_unique_nf [R : Red A] : confluent R →
 
 section Commuting
 
+class Red₁ (A : Type) where
+  reduces (x y : A) : Prop
 
+def Red₁.toRed (R : Red₁ A) : Red A := ⟨R.reduces⟩
+
+class Red₂ (A : Type) where
+  reduces (x y : A) : Prop
+
+def Red₂.toRed (R : Red₂ A) : Red A := ⟨R.reduces⟩
+
+infixl:50 " ~>₁ " => Red₁.reduces
+infixl:50 " ~>₂ " => Red₂.reduces
+
+@[simp]
+def refl_trans_clos_red₁ [R : Red₁ A] := refl_trans_clos R.reduces
+
+@[simp]
+def refl_trans_clos_red₂ [R : Red₂ A] := refl_trans_clos R.reduces
+
+infixl:50 " ~>₁* "   => refl_trans_clos_red₁
+infixl:50 " ~>₂* "   => refl_trans_clos_red₂
+
+def union (R R' : A → A → Prop) : A → A → Prop :=
+  fun x y => R x y ∨ R' x y
+
+def unionRed [R : Red₁ A] [R' : Red₂ A] := union R.reduces R'.reduces
+
+infix:50 " ~>₁+~>₂ " => unionRed
+
+-- This is a pretty powerful property: basically you can do ~>₁ and ~>₂ reductions
+-- in *any* order you like.
+def commutes (R : Red₁ A) (R' : Red₂ A) := ∀ x y z : A, x ~>₁* y → x ~>₂* z →
+  ∃ w, y ~>₂* w ∧ z ~>₁* w
+
+-- Obviously the transitive closure of the union contains the union of transitive
+-- closures.
+lemma trans_union_leq_union_trans (R R' : A → A → Prop) :
+  union (trans_clos R) (trans_clos R') ≤ trans_clos (union R R') := by
+  intros a b h
+  cases h
+  case _ =>
+    apply trans_clos_monotone (R := R) <;> try trivial
+    intros a b; simp [LE.le, union]; grind
+  case _ =>
+    apply trans_clos_monotone (R := R') <;> try trivial
+    intros a b; simp [LE.le, union]; grind
+
+def comp (R R' : A → A → Prop) : A → A → Prop := fun x y => ∃ z, R x z ∧ R' z y
+
+@[simp]
+def compRed [R : Red₁ A] [R' : Red₂ A] := comp R.reduces R'.reduces
+
+infix:50 " ~>₁;~>₂ " => compRed
+
+lemma contains_and_contained_trans_implies_trans_equal (R R' : A → A → Prop) :
+  R ≤ R' → R' ≤ refl_trans_clos R → refl_trans_clos R' = refl_trans_clos R := by
+  intros le₁ le₂
+  funext x y; apply propext; constructor
+  . intros h
+    induction h
+    case refl => grind
+    case step a b c h₁ h₂ ih =>
+      have : refl_trans_clos R a b := by
+        apply le₂; trivial
+      grind
+  . apply refl_trans_clos_monotone; trivial
+
+lemma contains_and_contained_trans_implies_diamond_conf
+  [R : Red₁ A]
+  [R' : Red₂ A] :
+  R.reduces ≤ R'.reduces → R'.reduces ≤ refl_trans_clos R.reduces → diamond R'.toRed → confluent R.toRed := by
+    intros h₁ h₂
+    have h := contains_and_contained_trans_implies_trans_equal _ _ h₁ h₂
+    intros diamond'
+    have h' := diamond_implies_confluent diamond'
+    have : confluent R'.toRed = confluent R.toRed := by
+      simp [Red₁.toRed, Red₂.toRed, confluent, wedge, joins]
+      rw [h]
+    grind
 
 end Commuting
