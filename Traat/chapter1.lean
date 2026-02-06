@@ -730,4 +730,53 @@ lemma contains_and_contained_trans_implies_diamond_conf
       rw [h]
     grind
 
+-- This theorem can be useful, say, to prove that the union of β and η reduction
+-- is confluent.
+theorem commuting_preserves_confluent [R : Red₁ A] [R' : Red₂ A]
+  (comm : commutes R R')
+  (confl₁ : confluent R.toRed)
+  (confl₂ : confluent R'.toRed) : confluent ⟨union R.reduces R'.reduces⟩ := by
+  let R₁ := union R.reduces R'.reduces
+  let R₂ := comp (refl_trans_clos R.reduces) (refl_trans_clos R'.reduces)
+  apply contains_and_contained_trans_implies_diamond_conf (R := ⟨R₁⟩) (R' := ⟨R₂⟩)
+  . simp [R₁, R₂]; intros x y h
+    cases h
+    case _ h =>
+      exists y; constructor
+      . constructor; exact h
+        constructor
+      . constructor
+    case _ h =>
+      exists x; constructor
+      . constructor
+      . constructor; exact h
+        constructor
+  . intros x y h
+    simp [R₂, comp] at h
+    let ⟨z, h₁, h₂⟩ := h
+    have h₃ : refl_trans_clos R₁ x z := by
+      apply refl_trans_clos_monotone Red₁.reduces R₁
+      . simp [R₁]; intros a b
+        simp [union]; grind
+      . trivial
+    have h₄ : refl_trans_clos R₁ z y := by
+      apply refl_trans_clos_monotone Red₂.reduces R₁
+      . simp [R₁]; intros a b
+        simp [union]; grind
+      . trivial
+    grind
+  . intros x y z; simp [Red₂.toRed, R₂]
+    intros h₁ h₂
+    have ⟨y', h₁₁, h₁₂⟩ := h₁
+    have ⟨z', h₂₁, h₂₂⟩ := h₂
+    have ⟨w₁, h₃₁, h₃₂⟩ := confl₁ y' z' ⟨x, ⟨by trivial, by trivial⟩⟩
+    have ⟨w₂, h₄₁, h₄₂⟩ := comm y' w₁ y (by trivial) (by trivial)
+    have ⟨w₃, h₅₁, h₅₂⟩ := comm z' w₁ z (by trivial) (by trivial)
+    have ⟨w₄, h₆₁, h₆₂⟩ := confl₂ w₂ w₃ ⟨w₁, ⟨by trivial, by trivial⟩⟩
+    exists w₄; apply And.intro
+    . exists w₂
+    . exists w₃
+
+
+
 end Commuting
