@@ -211,3 +211,29 @@ theorem soundness : Γ ⊢ E → Γ ⊧ E := by
     have h := h _ (by trivial) θ'
     rewrite [subst_eval]; rewrite [subst_eval] -- why does repeat rewrite not work?
     exact h
+
+-- Ok now for completeness. Let's build a little term model.
+
+#check Quotient
+#print Setoid
+#print Equivalence
+
+def CtxtRel (Γ : Ctxt) (t u : Term) : Prop := Γ ⊢ t ≅ u
+
+def EqCtxRel Γ : Equivalence (CtxtRel Γ) where
+  refl := sorry
+  symm := sorry
+  trans := sorry
+
+instance SetoidCtx (Γ : Ctxt) : Setoid Term where
+  r := CtxtRel Γ
+  iseqv := EqCtxRel Γ
+
+def TermModel (Γ : Ctxt) := Quotient <| SetoidCtx Γ
+
+#check Quotient.map₂'
+
+-- the "term model"
+instance ModelSetoidCtx (Γ : Ctxt) : Model (TermModel Γ) where
+  interp f := ⟦ func f ⟧
+  app t₁ t₂ := Quotient.map₂ (· @@ ·) _ t₁ t₂
