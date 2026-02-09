@@ -108,6 +108,7 @@ inductive Derives : Ctxt → FormalEq → Prop where
 | refl : Γ ⊢ (t ≅ t)
 | symm : Γ ⊢ (t ≅ u) → Γ ⊢ (u ≅ t)
 | trans : Γ ⊢ (t ≅ u) → Γ ⊢ (u ≅ v) → Γ ⊢ (t ≅ v)
+| congr : Γ ⊢ t₁ ≅ t₂ → Γ ⊢ u₁ ≅ u₂ → Γ ⊢ t₁ @@ u₁ ≅ t₂ @@ u₂
 | inst : Γ ⊢ (t ≅ u) → Γ ⊢ (t.apply σ ≅ u.apply σ)
 
 #check {} ⊢ "f" @@ var "x" ≅ "f" @@ var "x"
@@ -195,17 +196,21 @@ theorem soundness : Γ ⊢ E → Γ ⊧ E := by
   case _ E h =>
     simp; intros _ _ h' θ
     apply h'; trivial
-  case _ => simp
+  case _ => simp only [models, Model.models, Ctxt.satisfies, FormalEq.satisfies, FormalEq.eval,
+    implies_true]
   case _ h' =>
-    simp; intros; symm
+    simp only [models, Model.models, Ctxt.satisfies, FormalEq.satisfies, FormalEq.eval]; intros; symm
     apply h'; trivial
   case _ t u v h₁ h₂ h₃ h₄ =>
-    simp; intros _ _ θ _
+    simp only [models, Model.models, Ctxt.satisfies, FormalEq.satisfies, FormalEq.eval]; intros _ _ θ _
     trans
     . apply h₃; trivial
     . apply h₄; trivial
+  case _ _ _ _ _ _ _ h₁ h₂ =>
+    simp only [models, Model.models, Ctxt.satisfies, FormalEq.satisfies, FormalEq.eval, eval]; intros
+    rw [h₁, h₂] <;> trivial
   case _ t u σ _ h =>
-    simp at h; simp
+    simp only [models, Model.models, Ctxt.satisfies, FormalEq.satisfies, FormalEq.eval] at h; simp
     intros _ _ _ θ
     let θ' := fun x => ⦃σ x⦄ θ
     have h := h _ (by trivial) θ'
@@ -221,9 +226,13 @@ theorem soundness : Γ ⊢ E → Γ ⊧ E := by
 def CtxtRel (Γ : Ctxt) (t u : Term) : Prop := Γ ⊢ t ≅ u
 
 def EqCtxRel Γ : Equivalence (CtxtRel Γ) where
-  refl := sorry
-  symm := sorry
-  trans := sorry
+  refl := by grind [CtxtRel]
+  symm := by grind [CtxtRel]
+  trans := by grind [CtxtRel]
+
+lemma ctxtRelCongr (Γ : Ctxt) (t₁ t₂ u₁ u₂ : Term) :
+  CtxtRel Γ t₁ t₂ → CtxtRel Γ u₁ u₂ → CtxtRel Γ (t₁ @@ u₁) (t₂ @@ u₂) := by
+  grind [CtxtRel]
 
 instance SetoidCtx (Γ : Ctxt) : Setoid Term where
   r := CtxtRel Γ
@@ -236,4 +245,39 @@ def TermModel (Γ : Ctxt) := Quotient <| SetoidCtx Γ
 -- the "term model"
 instance ModelSetoidCtx (Γ : Ctxt) : Model (TermModel Γ) where
   interp f := ⟦ func f ⟧
-  app t₁ t₂ := Quotient.map₂ (· @@ ·) _ t₁ t₂
+  app t₁ t₂ := Quotient.map₂ (· @@ ·) (by intros; apply ctxtRelCongr <;> trivial) t₁ t₂
+
+#check Quotient.eq_iff_equiv
+
+lemma subst_term_model (Γ : Ctxt) (t : Term) (σ : Subst) :
+  let t_σ : TermModel Γ := ⟦t.apply σ⟧
+  let t_θ : TermModel Γ := ⦃ t ⦄ (fun x => ⟦σ x⟧)
+  t_σ = t_θ := by
+  simp; induction t <;> simp [eval, Term.apply]
+  case _ => eq_refl
+  case _ _ _ ih₁ ih₂ =>
+    rw [← ih₁, ← ih₂]
+    simp only [Model.app, Quotient.map₂_mk]
+
+lemma subst_id (t : Term) : t = t.apply (fun x => var x) := by induction t <;> grind [Term.apply]
+
+#check Quotient.out
+#check Quotient.out_eq
+
+lemma subst_lift (Γ : Ctxt) (t : Term) (θ : Valuation (TermModel Γ)) :
+  let lift_θ : Subst := fun x => (θ x).out
+  ⟦ t.apply lift_θ ⟧ = ⦃ t ⦄ θ := by
+  simp; rw [subst_term_model]; congr
+  funext; simp
+
+theorem completeness (Γ : Ctxt) (E : FormalEq) : Γ ⊧ E → Γ ⊢ E := by
+  intros models
+  have h : (∀ E ∈ Γ, ∀ (θ : Valuation (TermModel Γ)), ⦃E.lhs⦄ θ = ⦃E.rhs⦄ θ) := by
+    intros E mem θ
+    rw [← subst_lift]; rw [← subst_lift, Quotient.eq_iff_equiv]
+    simp [HasEquiv.Equiv, SetoidCtx, CtxtRel]
+    apply Derives.inst; apply Derives.ax; exact mem
+  have models := models (TermModel Γ) h (fun x => ⟦var x⟧); simp at models
+  rw [← subst_term_model] at models
+  rw [← subst_term_model, Quotient.eq_iff_equiv, ← subst_id] at models
+  rw [← subst_id] at models; exact models
