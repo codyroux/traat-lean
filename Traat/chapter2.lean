@@ -334,13 +334,14 @@ instance termRed : Red (RTerm ℛ) where
 -- Test lemma
 lemma Test.idRed (t : RTerm ℛ) : t ~>* t := by simp [Red.reduces]; grind
 
-def UnifyProp (t u : Term) : Prop := ∃ σ, t.apply σ = u.apply σ
+def Unifies (t u : Term) : Prop := ∃ σ, t.apply σ = u.apply σ
 
 def varUnify (x : Var) (t : Term) : Option Subst :=
-  if x ∈ t.vars then none else (fun y => if y = x then t else var y)
+  if (x ∈ t.vars ∧ t ≠ var x) then none else (fun y => if y = x then t else var y)
 
 @[grind =]
-lemma varUnify_some_iff (x : Var) (t : Term) : (varUnify x t).isSome ↔ x ∉ t.vars := by grind [varUnify]
+lemma varUnify_some_iff (x : Var) (t : Term) :
+  (varUnify x t).isSome ↔ (x ∉ t.vars ∨ t = var x) := by grind [varUnify]
 
 @[grind .]
 lemma varsSubApply₁ (t₁ t₂ : Term) : t₁.vars ⊆ (t₁ @@ t₂).vars := by
@@ -353,6 +354,9 @@ lemma varsSubApply₂ (t₁ t₂ : Term) : t₂.vars ⊆ (t₁ @@ t₂).vars := 
 lemma substDom (t : Term) (σ τ : Subst) (h : ∀ x ∈ t.vars, σ x = τ x) : t.apply σ = t.apply τ := by
   induction t <;> simp [Term.apply, Term.vars] at * <;> grind only
 
+@[simp, grind =]
+lemma idSubst_apply (t : Term) : t.apply idSubst = t := by grind
+
 lemma varDom (t : Term) (σ : Subst) (h : Disjoint σ.dom t.vars) : t.apply σ = t := by
   have h' : t = t.apply idSubst := by grind
   have h'' : ∀ x ∈ t.vars, σ x = idSubst x := by
@@ -362,18 +366,26 @@ lemma varDom (t : Term) (σ : Subst) (h : Disjoint σ.dom t.vars) : t.apply σ =
     apply h
   grind [substDom]
 
-
 lemma varUnifyDom (x : Var) (t : Term) (h : varUnify x t |>.isSome) :
   (varUnify x t |>.get h).dom ⊆ {x} := by
   simp [dom, varUnify]
 
+@[simp]
+lemma varUnifyId (x : Var) (h : varUnify x (var x) |>.isSome) :
+  (varUnify x (var x)).get h = idSubst := by
+  funext; grind [varUnify]
+
 lemma varUnifyUnif (x : Var) (t : Term) (h : varUnify x t |>.isSome) :
   (varUnify x t).get h x = t.apply ((varUnify x t).get h) := by
-  have h₁ : x ∉ t.vars := by
-    simp [varUnify] at h; trivial
-  have h₂ : Disjoint ((varUnify x t).get h).dom t.vars := by
-    grind [varUnifyDom]
-  rw [varDom]; simp [varUnify]; trivial
+  have h₁ : x ∉ t.vars ∨ t = var x := by
+    simp [varUnify] at h; grind
+  cases h₁
+  case _ =>
+    have h₂ : Disjoint ((varUnify x t).get h).dom t.vars := by
+      grind [varUnifyDom]
+    rw [varDom]; simp [varUnify]; trivial
+  case _ h =>
+    simp [h, Term.apply, varUnify]
 
 lemma varUnifyMGU  (x : Var) (t : Term) (σ : Subst)
   (unifies : varUnify x t |>.isSome)
@@ -386,6 +398,31 @@ lemma varUnifyMGU  (x : Var) (t : Term) (σ : Subst)
   by_cases h:(y = x); simp [h, scomp]
   . rw [substDom t _ σ] <;> grind
   . simp [scomp, h, Term.apply]
+
+lemma memSize (x : Var) (t : Term) (σ : Subst) (mem : x ∈ t.vars) (ne : t ≠ var x) :
+  sizeOf (σ x) < sizeOf (t.apply σ) := by
+  induction t
+  case _ => grind [vars]
+  case _ => grind [vars]
+  case _ t₁ t₂ ih₁ ih₂ =>
+    simp [apply]; simp [vars] at mem
+    cases mem
+    . by_cases eq:(t₁ = var x)
+      . simp [eq, apply]; grind
+      . grind
+    . by_cases eq:(t₂ = var x)
+      . simp [eq, apply]; grind
+      . grind
+
+lemma varUnifyNotSome (x : Var) (t : Term) (σ : Subst)
+  (hasUnifier : σ x = t.apply σ) :
+  varUnify x t |>.isSome := by
+  by_contra
+  have h : (varUnify x t) |>.isNone := by revert this; simp
+  have h' : x ∈ t.vars := by grind [varUnify]
+  have h'' : t ≠ var x := by grind [varUnify]
+  have h₃ := memSize x t σ (by trivial) (by trivial)
+  grind
 
 #print Decidable
 #print DecidableEq
@@ -418,6 +455,10 @@ def constrVars : List (Term × Term) → Finset Var
 
 def Subst.map₂ (σ : Subst) (l : List (Term × Term)) : List (Term × Term) :=
   l.map (fun (x, y) => (x.apply σ, y.apply σ))
+
+@[simp]
+lemma Subst.map₂_id (l : List (Term × Term)) : idSubst.map₂ l = l := by
+  induction l <;> grind [Subst.map₂]
 
 lemma substCodom (t : Term) (σ : Subst) (codom_inc : ∀ x ∈ t.vars, (σ x).vars ⊆ S) :
   (t.apply σ).vars ⊆ S := by
@@ -491,7 +532,9 @@ lemma unifyStep_isSome_var
 
 -- This is the clever bit: we get rid of a variable with that `varUnify`,
 -- which decreases the second leg of the measure.
-private lemma constrRemoveVar (h : (varUnify x u).isSome) :
+private lemma constrRemoveVar
+  (h : (varUnify x u).isSome)
+  (h' : u ≠ var x) :
   (constrVars (((varUnify x u).get h).map₂ tail)).card <
   (insert x (u.vars ∪ constrVars tail)).card := by
   apply cardExcludedMem (x := x)
@@ -525,8 +568,15 @@ lemma decltState : Prod.Lex (· < ·) (· < ·)
   --------------
   cases t
   case _ x =>
-    apply Prod.Lex.left; simp [constrVars, Term.vars]
-    apply constrRemoveVar
+    by_cases (u = var x)
+    case _ h' =>
+      apply Prod.Lex.right' <;> simp [h']
+      . simp [constrVars]
+        apply Finset.card_mono; simp [LE.le]; grind
+      . simp [constrSize]
+    case _ =>
+      apply Prod.Lex.left; simp [constrVars, Term.vars]
+      apply constrRemoveVar; grind
   case _ =>
     cases u
     case _ f x =>
@@ -566,6 +616,8 @@ def unify_aux (st : UnifyState) : Option Subst :=
   decreasing_by
     apply decltState
 
+def unify (t u : Term) : Option Subst := unify_aux ⟨idSubst, [(t, u)]⟩
+
 -- This is the "simple" version, but proving termination is quite hard.
 partial def unify' (t₁ t₂ : Term) : Option Subst :=
   match t₁, t₂ with
@@ -578,5 +630,15 @@ partial def unify' (t₁ t₂ : Term) : Option Subst :=
       let σ₂ ← unify' (u₁.apply σ₁) (u₂.apply σ₁)
       return σ₁.join σ₂
   | _, _ => none
+
+
+-- Ok let's start proving that `unify` actually unifies.
+
+def constrUnifier (σ : Subst) (l : List (Term × Term)) : Prop :=
+  ∀ x ∈ σ.map₂ l, x.1 = x.2
+
+def substUnifier (σ τ : Subst) : Prop := ∀ x, τ x = (σ x).apply τ
+
+
 
 end Rewriting
