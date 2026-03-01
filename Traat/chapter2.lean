@@ -497,6 +497,10 @@ def Subst.map₂ (σ : Subst) (l : List (Term × Term)) : List (Term × Term) :=
   l.map (fun (x, y) => (x.apply σ, y.apply σ))
 
 @[simp]
+lemma Subst.idSubstDom : idSubst.dom = ∅ := by
+  simp [idSubst, dom]
+
+@[simp]
 lemma Subst.map₂_id (l : List (Term × Term)) : idSubst.map₂ l = l := by
   induction l <;> grind [Subst.map₂]
 
@@ -519,7 +523,9 @@ lemma substMapDom (l : List (Term × Term)) (σ : Subst)
     . apply And.intro; grind [substCodom]
       apply ih; grind
 
-lemma excludeConstrCodom (l : List (Term × Term)) (σ : Subst) (x : Var) (h : ∀ y, x ∉ (σ y).vars) : x ∉ constrVars (σ.map₂ l) := by
+lemma excludeConstrCodom (l : List (Term × Term)) (σ : Subst) (x : Var)
+  (h : ∀ y, x ∉ (σ y).vars)
+  : x ∉ constrVars (σ.map₂ l) := by
   induction l <;> simp [Subst.map₂, constrVars]
   case _ t₁ t₂ ih =>
     have h' := fun t => excludeCodom t σ x h
@@ -595,9 +601,12 @@ private lemma constrRemoveVar
     . simp [h']; grind
     . simp [h', Term.vars]; grind
 
-@[simp]
 lemma varSubstId (t : Term) : t.apply (varSubst x (var x)) = t := by
   induction t <;> simp [apply, varSubst] <;> grind
+
+@[simp]
+lemma varSubstId' : (varSubst x (var x)) = idSubst := by
+  funext; simp [idSubst, varSubst]; grind
 
 @[simp]
 lemma varSubstIdMap : (varSubst x (var x)).map₂ l = l := by
@@ -940,8 +949,123 @@ theorem unifyProgress (σ : Subst) (st : UnifyState)
   . simp [Unifier, apply] at *; simp [unifyStep]; trivial
   . simp [Unifier, apply] at *; simp [unifyStep]
 
+#print constrDisjVar
+
+@[grind =>]
+lemma isUnifyFailUnifyStep : isUnifyFail t u → ¬ (unifyStep ⟨τ, (t, u)::l⟩).isSome := by
+  induction t <;> induction u <;> simp [isUnifyFail, unifyStep]
+
+#check substCodom
+
+lemma substUnion x (t u : Term) : (u.apply (varSubst x t)).vars ⊆ t.vars ∪ u.vars := by
+    apply substCodom; intros y h
+    by_cases h':(y = x) <;> simp [h', vars]
+    grind
+
+lemma substConstrUnion x t l : constrVars ((varSubst x t).map₂ l) ⊆ t.vars ∪ constrVars l := by
+  induction l <;> simp [constrVars, Subst.map₂]
+  case cons hd tl ih =>
+    let ⟨u₁, u₂⟩ := hd
+    simp
+    have h₁ := substUnion x t u₁
+    have h₂ := substUnion x t u₂
+    apply Finset.union_subset
+    . grind
+    . apply Finset.union_subset
+      . grind
+      . have h' : -- hmpf
+         constrVars (List.map (fun x_1 => (x_1.1.apply (varSubst x t), x_1.2.apply (varSubst x t))) tl) =
+         constrVars ((varSubst x t).map₂ tl) := by eq_refl
+        rw [h']
+        grind
+
+
+lemma disjSubst (t u : Term) (h : Disjoint S t.vars) (h' : Disjoint S u.vars)
+ : Disjoint S (u.apply (varSubst x t)).vars := by
+  have h₂ : (u.apply (varSubst x t)).vars ⊆ u.vars ∪ t.vars := by
+    apply substCodom; intros y h
+    by_cases h':(y = x) <;> simp [h', vars]
+    grind
+  apply Disjoint.mono_right (c := u.vars ∪ t.vars); trivial
+  apply Disjoint.sup_right <;> trivial
+
+lemma unifyStepVarCases (t : Term) (h : unifyStep ⟨τ, (var x, t)::l⟩ |>.isSome) :
+  t = var x ∨ x ∉ t.vars := by
+  have h' := varUnify_some_iff x t
+  simp [unifyStep] at h
+  cases h'':(varUnify x t) <;> simp [h''] at h
+  simp [h''] at h'
+  grind
+
+lemma unifyStepVarCasesInv (x : Var) (t : Term) (h : ∀ y, t ≠ var y) (h' : unifyStep ⟨τ, (t, var x)::l⟩ |>.isSome) :
+  x ∉ t.vars := by
+  have h'' := varUnify_some_iff x t
+  simp [unifyStep] at h'
+  cases h₃:(varUnify x t)
+  . simp [h₃] at h'
+  . grind
+
+lemma disjointVarSubst (x : Var) (t u : Term) (h : x ∉ t.vars)
+ : Disjoint {x} (u.apply (varSubst x t)).vars := by
+  induction u <;> simp [apply, vars]
+  case _ y =>
+    by_cases h':(y = x) <;> simp [h', vars] <;> grind
+  case _ => simp at *; grind
+
+lemma disjointConstrVarSubst {x : Var} {t : Term} (h : x ∉ t.vars)
+ : Disjoint {x} (constrVars <| (varSubst x t).map₂ l) := by
+  induction l <;> simp [Subst.map₂, constrVars]
+  case _ _ ih =>
+  have h' := disjointVarSubst (x := x) t
+  simp at *
+  constructor; grind
+  constructor; grind
+  apply ih
+
 
 theorem unifyDisj (σ : Subst) (st : UnifyState) (h : unifyStep st |>.isSome)
-  : constrDisjVar st → constrDisjVar (unifyStep st |>.get h) := by sorry
+  : constrDisjVar st → constrDisjVar (unifyStep st |>.get h) := by
+  revert h
+  let ⟨τ, l⟩ := st
+  apply unifyInduction (P := fun l => _) l
+  . grind
+  . intros h; simp [unifyStep] at h
+  . intros l x t dummy h; clear dummy
+    simp [unifyStep, constrDisjVar, constrVars, vars]
+    -- clear h
+    intros; constructor
+    . apply Disjoint.mono_right (c:= ↑ (t.vars ∪ constrVars l))
+      . apply substConstrUnion
+      . rw [Finset.coe_union]
+        apply Disjoint.union_right <;> trivial
+    . cases unifyStepVarCases t h
+      case _ h => rw [h]; simp
+      case _ h =>
+        rw [varSubstDom'] <;> try trivial
+        . rw [← Finset.coe_singleton]
+          apply Finset.disjoint_coe.2
+          apply disjointConstrVarSubst
+          trivial
+        . intro h'; apply congr_arg (f:=Term.vars) at h'; simp [vars] at h'; grind
+  . intros l x t nvar h step
+    simp [unifyStep, constrDisjVar, constrVars, vars]
+    -- clear h
+    intros; constructor
+    . apply Disjoint.mono_right (c:= ↑ (t.vars ∪ constrVars l))
+      . apply substConstrUnion
+      . rw [Finset.coe_union]
+        apply Disjoint.union_right <;> trivial
+    . have h' := unifyStepVarCasesInv x t nvar step
+      rw [varSubstDom'] <;> try trivial
+      . rw [← Finset.coe_singleton]
+        apply Finset.disjoint_coe.2
+        apply disjointConstrVarSubst
+        trivial
+      . intro h'; apply congr_arg (f:=Term.vars) at h'; simp [vars] at h'; grind
+  . intros _ _ _ _ _; simp [constrDisjVar, unifyStep, constrVars, vars]
+  . intros _ _ _ _ _; simp [constrDisjVar, unifyStep, constrVars, vars]
+    grind
+
+-- Ok now we're ready to prove actual soundness and completeness of the unification process.
 
 end Rewriting
