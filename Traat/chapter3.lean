@@ -16,6 +16,10 @@ lemma varSubstNEq (h : y ≠ x) : varSubst x t y = var y := by grind [varSubst]
 @[simp]
 lemma varSubstEq : varSubst x t x = t := by grind [varSubst]
 
+@[grind →]
+lemma unifierSymm (σ : Subst) (t u : Term) (_ : Unifier σ t u) : Unifier σ u t := by
+  simp [Unifier] at *; grind
+
 def varUnify (x : Var) (t : Term) : Option Subst :=
   if (x ∈ t.vars ∧ t ≠ var x) then none
   else varSubst x t
@@ -219,8 +223,7 @@ def unifyStep (st : UnifyState) : Option UnifyState :=
     let σ ← varUnify x t
     return ⟨st.subst.scomp σ, σ.map₂ cstr⟩
   | (t, var x) :: cstr => do
-    let σ ← varUnify x t
-    return ⟨st.subst.scomp σ, σ.map₂ cstr⟩
+    return ⟨st.subst, (var x, t)::cstr⟩
   | (func f, func g) :: cstr =>
     if f = g then
       return ⟨st.subst, cstr⟩
@@ -239,8 +242,21 @@ noncomputable def constrSize : List (Term × Term) → ℕ
 | [] => 0
 | (t₁, t₂) :: cstrs => 1 + sizeOf t₁ + sizeOf t₂ + (constrSize cstrs)
 
-noncomputable def ltState (st : UnifyState) : ℕ × ℕ :=
-  (constrVars st.constraints |> Finset.card, constrSize st.constraints)
+def isVar : Term → Bool
+| var _ => true
+| _ => false
+
+def rhsVarSize : List (Term × Term) → ℕ
+| [] => 0
+| (t₁, t₂) :: cstrs =>
+  if ¬ isVar t₁ ∧ isVar t₂
+  then 1 + rhsVarSize cstrs
+  else rhsVarSize cstrs
+
+noncomputable def ltState (st : UnifyState) : ℕ × ℕ × ℕ :=
+  (constrVars st.constraints |> Finset.card,
+   constrSize st.constraints,
+   rhsVarSize st.constraints)
 
 #print Prod.Lex
 
@@ -291,8 +307,11 @@ lemma varSubstId' : (varSubst x (var x)) = idSubst := by
 lemma varSubstIdMap : (varSubst x (var x)).map₂ l = l := by
   induction l <;> simp [map₂]
 
+#synth LT (ℕ × ℕ)
+#print Prod.instPreorder
+
 -- This is quite a bit more tedious than I'd like.
-lemma decltState : Prod.Lex (· < ·) (· < ·)
+lemma decltState : Prod.Lex (· < ·) (Prod.Lex (· < ·) (· < ·))
   (ltState ((unifyStep st).get h)) (ltState st) := by
   have ⟨_, l⟩ := st
   rcases l with _ | ⟨⟨t, u⟩, tail⟩ <;> simp [unifyStep]
@@ -307,33 +326,30 @@ lemma decltState : Prod.Lex (· < ·) (· < ·)
         apply Finset.card_mono
         simp [LE.le]
         grind
-      . simp [constrSize]
+      . apply Prod.Lex.left
+        simp [constrSize]
     case _ =>
       apply Prod.Lex.left; simp [constrVars, Term.vars]
       apply constrRemoveVar <;> grind
   case _ =>
     cases u
     case _ f x =>
-      apply Prod.Lex.left; simp [constrVars, Term.vars]
-      have h' := constrRemoveVar (x:=x) (tail:=tail) (u := func f)
-      simp [Subst.map₂, Term.vars] at h'
-      apply h'; simp [varUnify, vars]
+      apply Prod.Lex.right; apply Prod.Lex.right; simp [rhsVarSize, isVar]
     case _ =>
       apply Prod.Lex.right' <;> simp [constrVars]
       . apply Finset.card_mono
         simp [LE.le]; grind
-      . simp [constrSize]
+      . apply Prod.Lex.left
+        simp [constrSize]
     case _ => simp [unifyStep] at h
   case _ t₁ t₂ =>
     cases u
     case _ x =>
-      apply Prod.Lex.left; simp [constrVars, Term.vars]
-      have h' := constrRemoveVar (x:=x) (tail:=tail) (u := t₁ @@ t₂)
-      simp [Subst.map₂, Term.vars] at h'
-      apply h'; simp [unifyStep] at h
-      cases h'' :(varUnify x (t₁ @@ t₂))
-      . rw [h''] at h; simp at h
-      . simp
+      apply Prod.Lex.right'
+      . simp [constrVars]; grind
+      . apply Prod.Lex.right'
+        . simp [constrSize]; grind
+        . simp [rhsVarSize, isVar]
     case _ => simp [unifyStep] at h
     case _ =>
       apply Prod.Lex.right' <;> simp [constrVars]
@@ -552,8 +568,7 @@ theorem unifyStepSound (σ : Subst) (st : UnifyState) (h : unifyStep st |>.isSom
     intros l x t _ τ _; simp [unifyStep, StateUnifier, ConstrUnifier]
     intros; rw [← unifyVarConstr, ← unifyVarSubst] <;> simp [Unifier, apply] at * <;> grind
   case _ =>
-    intros l x t _ τ _; simp [unifyStep, StateUnifier, ConstrUnifier]
-    intros; rw [← unifyVarConstr, ← unifyVarSubst] <;> simp [Unifier, apply] at * <;> grind
+    intros l x t _ τ _; simp [unifyStep, StateUnifier, ConstrUnifier]; grind
   case _ =>
     intros _ f g _ τ _
     simp [unifyStep, StateUnifier, ConstrUnifier]
@@ -612,22 +627,7 @@ theorem unifyStepComplete (σ : Subst) (st : UnifyState) (h : unifyStep st |>.is
     . apply h₃
   case _ =>
     intros l x t _ _ τ _; simp [unifyStep, StateUnifier, ConstrUnifier, ConstrDisjVar]
-    intros h₁ h₂
-    -- Some tedium here
-    have h₃ : Unifier σ (var x) t := by
-      simp [constrVars] at h₁
-      have h₄ : Disjoint τ.dom (varSubst x t).dom := by
-        apply Disjoint.mono_right (c:={x})
-        . apply varSubstDom
-        . simp [vars] at h₁; simp; grind
-      have h₅ := disjScompUnifier _ _ _ h₄ h₂
-      simp [Unifier, apply]
-      have h₆ := h₅ x
-      simp at h₆; trivial
-    rw [← unifyVarConstr]; rw [← unifyVarSubst] at h₂
-    . simp [Unifier] at *; grind
-    . apply h₃
-    . apply h₃
+    grind
   case _ =>
     intros _ f g _ τ h
     simp [unifyStep, StateUnifier, ConstrUnifier, Unifier, apply]
@@ -658,9 +658,6 @@ theorem unifyProgress (σ : Subst) (st : UnifyState)
     grind
   case _ x t _ _ _ h _ =>
     simp [unifyStep]
-    have h' := varUnifyNotSome x t σ (by simp [Unifier, apply] at h; grind)
-    apply isSomeBindSome; trivial
-    grind
   . simp [Unifier, apply] at *; simp [unifyStep]; trivial
   . simp [Unifier, apply] at *; simp [unifyStep]
 
@@ -707,15 +704,6 @@ lemma unifyStepVarCases (t : Term) (h : unifyStep ⟨τ, (var x, t)::l⟩ |>.isS
   simp [h''] at h'
   grind
 
-@[grind →]
-lemma unifyStepVarCasesInv (x : Var) (t : Term) (h : ∀ y, t ≠ var y) (h' : unifyStep ⟨τ, (t, var x)::l⟩ |>.isSome) :
-  x ∉ t.vars := by
-  have h'' := varUnify_some_iff x t
-  simp [unifyStep] at h'
-  cases h₃:(varUnify x t)
-  . simp [h₃] at h'
-  . grind
-
 lemma disjointVarSubst (x : Var) (t u : Term) (h : x ∉ t.vars)
  : Disjoint {x} (u.apply (varSubst x t)).vars := by
   induction u <;> simp [apply, vars]
@@ -761,19 +749,6 @@ theorem unifyDisj (st : UnifyState) (h : unifyStep st |>.isSome)
           . simp; grind
   . intros l x t nvar dummy h; clear dummy
     simp [unifyStep, ConstrDisjVar, constrVars, vars]
-    -- clear h
-    intros
-    have h₁ := (unifyStepVarCasesInv _ _ nvar h)
-    apply Disjoint.mono_left (b:= (τ.dom ∪ {x}))
-    . have h := scompDom τ (varSubst x t)
-      have h' := varSubstDom x t
-      simp; grind -- This one is a bit awkard to grind
-    . simp; constructor
-      . have h' := disjointConstrVarSubst (x:=x) (t:=t) (l:=l)
-        simp at h'; grind
-      . apply Disjoint.mono_right (c:= ↑(t.vars ∪ constrVars l))
-        . apply substConstrUnion -- miracle
-        . simp; grind
   . intros _ _ _ _ _; simp [ConstrDisjVar, unifyStep, constrVars, vars]
   . intros _ _ _ _ _; simp [ConstrDisjVar, unifyStep, constrVars, vars]
     grind
@@ -870,14 +845,7 @@ theorem unifyIdem (st : UnifyState) (h : unifyStep st |>.isSome)
       simp [ConstrDisjVar, constrVars] at h
       grind
   . intros l x t _ discard isSome idemSt; clear discard
-    simp [unifyStep]; intros disj
-    by_cases h: (t = var x); simp [h]; apply idemSt.1
-    apply idemScomp
-    . apply idemSt.1
-    . grind
-    . have h := idemSt.2
-      simp [ConstrDisjVar, constrVars] at h
-      grind
+    simp [unifyStep]; intros; grind
   . simp [unifyStep]; intros; trivial
   . simp [unifyStep]; intros; trivial
 
@@ -996,7 +964,8 @@ lemma unify_auxComplete
   . apply unify_auxEnding; grind
   . intros st h h'
     apply unifyStepComplete
-    . sorry
+    . simp [IdemState] at unif
+      sorry
     . grind
     . grind
 
