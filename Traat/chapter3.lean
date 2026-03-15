@@ -824,7 +824,7 @@ lemma idemScomp (σ : Subst) (x : Var) (t : Term)
       simp [IdemAux] at h₁
       grind
 
-theorem unifyIdem (st : UnifyState) (h : unifyStep st |>.isSome)
+theorem unifyStepIdem (st : UnifyState) (h : unifyStep st |>.isSome)
   : IdemState st → IdemState (unifyStep st |>.get h) := by
   intros idemSt
   have disjConstr : ConstrDisjVar ((unifyStep st).get h) := by
@@ -901,6 +901,36 @@ lemma unifyFunIndBack (P : UnifyState → Prop)
     simp [stepSome] at ending
     apply step
     . apply unifyFunIndBack
+      . apply ending -- what's happening here?
+      . trivial
+  termination_by ltState st
+  decreasing_by
+    have h := decltState (st:=⟨τ, constr⟩) (h:= by grind)
+    grind
+
+-- God I hate this lemma. Basically we're traveling both forward and backwards to our
+-- destination. Forward for the Q's and backword for the P's.
+lemma unifyFunIndBi
+  (P : UnifyState → Prop)
+  (Q : UnifyState → Prop)
+  (st : UnifyState)
+  (h : unify_aux st |>.isSome)
+  (beginning : Q st)
+  (stepForth : ∀ st (h : unifyStep st |>.isSome), Q st → Q (unifyStep st |>.get h))
+  (ending : P (unify_aux st |>.get h))
+  (stepBack : ∀ st (h : unifyStep st |>.isSome), Q st → P (unifyStep st |>.get h) → P st)
+   : P st := by
+  let ⟨τ, constr⟩ := st
+  unfold unify_aux at ending
+  cases constr <;> simp at ending; trivial
+  case _ head tail =>
+    have stepSome := unify_auxUnifyStepIsSome ⟨τ, head::tail⟩ (by simp) h
+    simp [stepSome] at ending
+    have h : Q ⟨τ, head::tail⟩ := by trivial
+    apply stepBack ⟨τ, head::tail⟩ (by grind) h _
+    . apply unifyFunIndBi (Q := Q) (st := (unifyStep { subst := τ, constraints := head :: tail }).get (by trivial))
+      . apply stepForth; trivial
+      . trivial
       . apply ending
       . trivial
   termination_by ltState st
@@ -923,7 +953,7 @@ lemma unify_auxIdem
   (unif : IdemState st)
   (h : unify_aux st |>.isSome)
    : IdemState (unify_aux st |>.get h) := by
-  apply unifyFunInd <;> grind [unifyIdem]
+  apply unifyFunInd <;> grind [unifyStepIdem]
 
 @[simp]
 lemma unify_auxEmptyConstr
@@ -960,14 +990,16 @@ lemma unify_auxComplete
   (unif : IdemState st)
   (h : unify_aux st |>.isSome)
   : StateUnifier (unify_aux st |>.get h).subst st := by
-  apply unifyFunIndBack
-  . apply unify_auxEnding; grind
-  . intros st h h'
+  apply unifyFunIndBi (Q := IdemState) (P := fun st' =>
+    StateUnifier (unify_aux st |>.get h).subst st')
+  . trivial
+  . grind [unifyStepIdem]
+  . grind [unify_auxEnding]
+  . intros st' h' idemSt unifierUnify
     apply unifyStepComplete
-    . simp [IdemState] at unif
-      sorry
-    . grind
-    . grind
+    . apply idemSt.2
+    . trivial
+  . trivial
 
 lemma idemStateId : IdemState ⟨idSubst, l⟩ := by
   simp [IdemState]; constructor <;> simp [Idem, ConstrDisjVar]
@@ -976,9 +1008,9 @@ theorem unifySound (h : unify t u |>.isSome) : Unifier (unify t u |>.get h) t u 
   simp [unify]
   simp [unify] at h
   have h' : IdemState ⟨idSubst, [(t, u)]⟩ := by apply idemStateId
-  have h'' := unify_auxEnding h' h
-  have h₃ := unifyStepComplete
-  sorry
+  have h'' := unify_auxComplete (by trivial) (by trivial)
+  simp [StateUnifier, ConstrUnifier] at h''
+  grind
 
 theorem unifyComplete_aux
   (unif : StateUnifier σ st)
