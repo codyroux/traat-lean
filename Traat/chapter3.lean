@@ -557,7 +557,7 @@ lemma unifyVarConstr (σ : Subst) x (t : Term)
 lemma isUnifyFailUnifyStep : isUnifyFail t u → ¬ (unifyStep ⟨τ, (t, u)::l⟩).isSome := by
   induction t <;> induction u <;> simp [isUnifyFail, unifyStep]
 
-theorem unifyStepSound (σ : Subst) (st : UnifyState) (h : unifyStep st |>.isSome) :
+theorem unifyStepComplete (σ : Subst) (st : UnifyState) (h : unifyStep st |>.isSome) :
   StateUnifier σ st → StateUnifier σ (unifyStep st |>.get h) := by
   let ⟨τ, l⟩ := st
   revert h τ
@@ -599,7 +599,7 @@ lemma disjScompUnifier (σ₁ σ₂ σ₃ : Subst)
   . simp [dom] at h; grind [apply]
 
 -- disjointness doesn't appear in the paper proof, annoyingly
-theorem unifyStepComplete (σ : Subst) (st : UnifyState) (h : unifyStep st |>.isSome)
+theorem unifyStepSound (σ : Subst) (st : UnifyState) (h : unifyStep st |>.isSome)
   (disj : ConstrDisjVar st)
   : StateUnifier σ (unifyStep st |>.get h) → StateUnifier σ st := by
   let ⟨τ, l⟩ := st
@@ -943,11 +943,11 @@ lemma unifyFunIndBi
 
 #print StateUnifier
 
-lemma unify_auxSound
+lemma unify_auxComplete
   (unif : StateUnifier σ st)
   (h : unify_aux st |>.isSome)
    : StateUnifier σ (unify_aux st |>.get h) := by
-  apply unifyFunInd <;> grind [unifyStepSound]
+  apply unifyFunInd <;> grind [unifyStepComplete]
 
 lemma unify_auxIdem
   (unif : IdemState st)
@@ -986,7 +986,7 @@ lemma unify_auxEnding
 
 #check unifyStepComplete
 
-lemma unify_auxComplete
+lemma unify_auxSound
   (unif : IdemState st)
   (h : unify_aux st |>.isSome)
   : StateUnifier (unify_aux st |>.get h).subst st := by
@@ -996,7 +996,7 @@ lemma unify_auxComplete
   . grind [unifyStepIdem]
   . grind [unify_auxEnding]
   . intros st' h' idemSt unifierUnify
-    apply unifyStepComplete
+    apply unifyStepSound
     . apply idemSt.2
     . trivial
   . trivial
@@ -1008,7 +1008,7 @@ theorem unifySound (h : unify t u |>.isSome) : Unifier (unify t u |>.get h) t u 
   simp [unify]
   simp [unify] at h
   have h' : IdemState ⟨idSubst, [(t, u)]⟩ := by apply idemStateId
-  have h'' := unify_auxComplete (by trivial) (by trivial)
+  have h'' := unify_auxSound (by trivial) (by trivial)
   simp [StateUnifier, ConstrUnifier] at h''
   grind
 
