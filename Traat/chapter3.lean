@@ -643,7 +643,7 @@ lemma isSomeBindSome {α β} (x : Option α) (f : α → Option β) (h : x.isSom
   cases x <;>
   grind
 
-theorem unifyProgress (σ : Subst) (st : UnifyState)
+theorem unifyStepProgress (σ : Subst) (st : UnifyState)
   (h₁ : ¬ st.constraints.isEmpty)
   (h₂ : StateUnifier σ st) : (unifyStep st |>.isSome) := by
   revert h₁ h₂
@@ -1012,9 +1012,70 @@ theorem unifySound (h : unify t u |>.isSome) : Unifier (unify t u |>.get h) t u 
   simp [StateUnifier, ConstrUnifier] at h''
   grind
 
-theorem unifyComplete_aux
+
+#print IdemState
+#print StateUnifier
+#print SubstUnifier
+#print unify_auxComplete
+
+-- the crucial lemma 4.6.2 from TRAAT
+-- lemma unify_auxUnifier
+
+lemma StateUnifierIsUnifier (σ : Subst) (t u : Term) (unifies: Unifier σ t u)
+  : StateUnifier σ ⟨idSubst, [(t, u)]⟩ := by
+  simp [StateUnifier, ConstrUnifier, SubstUnifier, apply]
+  grind
+
+lemma unifyComplete_aux
   (unif : StateUnifier σ st)
-  (h : unifyStep st |>.isSome)
-  : ∃ τ, σ = (unifyStep st |>.get h).subst.scomp τ := by sorry
+  (h : unify_aux st |>.isSome)
+  : ∃ τ, σ = (unify_aux st |>.get h).subst.scomp τ := by
+  exists σ
+  funext x
+  have h' := unify_auxComplete unif h
+  simp [StateUnifier, SubstUnifier] at h'
+  grind [scomp]
+#check unifyStepProgress
+
+theorem unify_auxProgress
+  (unif : StateUnifier σ st)
+ : unify_aux st |>.isSome := by
+ -- apply unifyFunInd -- well crap
+ have h' := unifyStepProgress σ st
+ let ⟨τ, cstrs⟩ := st
+ cases cstrs
+ case nil => simp [unify_aux]
+ case cons head tail =>
+  unfold unify_aux
+  simp at h'
+  have h' := h' unif
+  simp [h']
+  apply unify_auxProgress (σ := σ)
+  apply unifyStepComplete; grind
+termination_by ltState st
+decreasing_by
+  grind [decltState]
+
+
+theorem unifyProgress
+  (unif : Unifier σ t u)
+ : unify t u |>.isSome := by
+ simp [unify]
+ apply unify_auxProgress (σ := σ)
+ apply StateUnifierIsUnifier; grind
+
+
+lemma unifyComplete'
+  (unif : Unifier σ t u)
+  (h : unify t u |>.isSome)
+  : ∃ τ, σ = (unify t u |>.get h).scomp τ := by
+  simp [unify]
+  apply unifyComplete_aux
+  apply StateUnifierIsUnifier; grind
+
+theorem unifyComplete
+  (unif : Unifier σ t u)
+  : ∃ τ, σ = (unify t u |>.get (unifyProgress unif)).scomp τ := by
+  grind [unifyComplete']
 
 end Unification
