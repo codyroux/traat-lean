@@ -11,12 +11,14 @@ def Sig := String
 
 instance : DecidableEq Var := by simp [Var]; infer_instance
 instance : DecidableEq Sig := by simp [Sig]; infer_instance
+instance : Repr Var := by simp [Var]; infer_instance
+instance : Repr Sig := by simp [Sig]; infer_instance
 
 inductive Term where
 | var : Var → Term
 | func : Sig → Term
 | app : Term → Term → Term
-deriving DecidableEq
+deriving DecidableEq, Repr
 
 open Term
 
