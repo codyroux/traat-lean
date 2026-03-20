@@ -66,6 +66,10 @@ def Term.sig : Term → Finset Sig
 | t₁ @@ t₂ => t₁.sig ∪ t₂.sig
 | _ => {}
 
+def Term.isVar : Term → Bool
+| var _ => true
+| _ => false
+
 @[grind =_]
 lemma Term.subst_id (t : Term) : t = t.apply Subst.idSubst := by induction t <;> grind [Term.apply]
 

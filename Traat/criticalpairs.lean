@@ -64,12 +64,91 @@ lemma Position.validSubst (p : Position) (t : Term) (σ : Subst)
   | _::_, func _ => simp [valid] at h
 
 lemma validAppend {p₁ p₂ : Position} (h : (p₁++p₂).valid t)
-  : p₁.valid t := by sorry
+  : p₁.valid t := by
+  revert h
+  match p₁, t with
+  | [], _ => simp [Position.valid]
+  | left::_, t₁ @@ _ => simp [Position.valid]; intro h; apply validAppend h
+  | right::_, _ @@ t₂ => simp [Position.valid]; intro h; apply validAppend h
+  | _::_, var _ => simp [Position.valid]
+  | _::_, func _ => simp [Position.valid]
 
 lemma validAppendTail {p₁ p₂ : Position} (h : (p₁++p₂).valid t)
-  : p₂.valid <| p₁.get t (validAppend h) := by sorry
+  : p₂.valid <| p₁.get t (validAppend h) := by
+  revert h
+  match p₁, t with
+  | [], _ => simp [Position.valid, Position.get]
+  | left::_, t₁ @@ _ => simp [Position.valid, Position.get]; intro h; apply validAppendTail h
+  | right::_, _ @@ t₂ => simp [Position.valid, Position.get]; intro h; apply validAppendTail h
+  | _::_, var _ => simp [Position.valid]
+  | _::_, func _ => simp [Position.valid]
 
+@[simp]
 lemma getAppend {p₁ p₂ : Position} (h : (p₁++p₂).valid t)
-  : (p₁ ++ p₂).get t h = p₂.get (p₁.get t <| validAppend h) (validAppendTail h) := by sorry
+  : (p₁ ++ p₂).get t h = p₂.get (p₁.get t <| validAppend h) (validAppendTail h) := by
+  revert h
+  match p₁, t with
+  | [], _ => simp [Position.valid, Position.get]
+  | left::_, t₁ @@ _ => simp [Position.valid, Position.get]; intro h; apply getAppend h
+  | right::_, _ @@ t₂ => simp [Position.valid, Position.get]; intro h; apply getAppend h
+  | _::_, var _ => simp [Position.valid]
+  | _::_, func _ => simp [Position.valid]
+
+-- define splitting of a position in tσ into a position in t and a "tail"
+-- prove that the concat is the original path
+def Position.splitOnSubst (p : Position) (t : Term) (σ : Subst) : Position × Position :=
+  match p, t with
+  | _, var _ => ([], p)
+  | _, func _ => ([], p)
+  | left::p', t₁ @@ _ =>
+    let (p₁, p₂) := Position.splitOnSubst p' t₁ σ
+    (left::p₁, p₂)
+  | right::p', _ @@ t₂ =>
+    let (p₁, p₂) := Position.splitOnSubst p' t₂ σ
+    (right::p₁, p₂)
+  | [], _ => ([], [])
+
+@[simp]
+lemma splitOnSubstHead : Position.splitOnSubst [] t σ = ([], []) := by
+  induction t <;> simp [Position.splitOnSubst]
+
+lemma splitOnSubstValid {p : Position} (h : p.valid (t.apply σ))
+  : (p.splitOnSubst t σ).fst |>.valid t := by
+  revert h
+  match p, t with
+  | [], _ => simp [Position.valid]
+  | left::p', t₁ @@ _ =>
+    simp [Position.splitOnSubst, apply, Position.valid]
+    intros; apply splitOnSubstValid; grind
+  | right::p', _ @@ t₂ =>
+    simp [Position.splitOnSubst, apply, Position.valid]
+    intros; apply splitOnSubstValid; grind
+  | _, var _ =>
+    simp [Position.valid, Position.splitOnSubst, apply]
+  | _, func _ =>
+    simp [Position.valid, Position.splitOnSubst, apply]
+
+lemma splitOnSubstConcat {p : Position}
+ : (p.splitOnSubst t σ).1 ++ (p.splitOnSubst t σ).2 = p := by
+  match p, t with
+  | [], _ => simp
+  | left::p', t₁ @@ _ =>
+    simp [Position.splitOnSubst]
+    apply splitOnSubstConcat
+  | right::p', _ @@ t₂ =>
+    simp [Position.splitOnSubst]
+    apply splitOnSubstConcat
+  | _, var _ =>
+    simp [Position.splitOnSubst]
+  | _, func _ =>
+    simp [Position.splitOnSubst]
+
+-- A rewrite at a position that satisfies this predicate is "inner", that is
+-- it occurs only within substituted terms.
+def IsInnerPosition (p : Position) (t : Term) (σ : Subst) : Bool :=
+  let ⟨p, _⟩ := p.splitOnSubst t σ
+  if h : (p.valid t) then p.get t h |>.isVar else false
+
+-- define subst-at, rewrite-at, prove that you can always replace a rewrite with a rewrite at
 
 end Position

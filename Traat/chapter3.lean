@@ -242,10 +242,6 @@ noncomputable def constrSize : List (Term × Term) → ℕ
 | [] => 0
 | (t₁, t₂) :: cstrs => 1 + sizeOf t₁ + sizeOf t₂ + (constrSize cstrs)
 
-def isVar : Term → Bool
-| var _ => true
-| _ => false
-
 def rhsVarSize : List (Term × Term) → ℕ
 | [] => 0
 | (t₁, t₂) :: cstrs =>
