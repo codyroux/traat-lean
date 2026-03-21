@@ -151,4 +151,99 @@ def IsInnerPosition (p : Position) (t : Term) (σ : Subst) : Bool :=
 
 -- define subst-at, rewrite-at, prove that you can always replace a rewrite with a rewrite at
 
+def Term.substAt (t : Term) (p : Position) (h : p.valid t) (u : Term) : Term :=
+match p, t with
+| [], _ => u
+| left::p', t₁ @@ t₂ => (Term.substAt t₁ p' h u) @@ t₂
+| right::p', t₁ @@ t₂ => t₁ @@ (Term.substAt t₂ p' h u)
+| _::_, var _ => by simp [Position.valid] at h
+| _::_, func _ => by simp [Position.valid] at h
+
+lemma validSubstAt {p : Position} (h : p.valid t)
+  : p.valid (t.substAt p h u) := by
+  revert h
+  match p, t with
+  | [], _ => simp [Position.valid]
+  | left::p', t₁ @@ _ =>
+    simp [Position.valid, substAt]
+    apply validSubstAt
+  | right::p', _ @@ t₂ =>
+    simp [Position.valid, substAt]
+    apply validSubstAt
+  | _::_, var _ => simp [Position.valid, substAt]
+  | _::_, func _ => simp [Position.valid, substAt]
+
+@[simp]
+lemma substAtget {t : Term} {p : Position} (h : p.valid t)
+ : p.get (t.substAt p h u) (validSubstAt h) = u := by
+  revert h
+  match p, t with
+  | [], _ => simp [Position.valid, substAt, Position.get]
+  | left::p', t₁ @@ _ =>
+    simp [Position.valid, substAt, substAt]
+    apply substAtget
+  | right::p', _ @@ t₂ =>
+    simp [Position.valid, substAt, substAt]
+    apply substAtget
+  | _::_, var _ => simp [Position.valid, substAt]
+  | _::_, func _ => simp [Position.valid, substAt]
+
+def Position.Inc (p q : Position) : Bool :=
+match p, q with
+| [], _ => true
+| left::p', left::q' => Position.Inc p' q'
+| right::p', right::q' => Position.Inc p' q'
+| _, _ => false
+
+#print HasSubset
+
+instance Position.instHasSubset : HasSubset Position where
+  Subset p q := Position.Inc p q
+
+-- A little tedium here
+@[grind →]
+lemma validInc {p q : Position} (h : q.valid t) (inc : p ⊆ q)
+ : p.valid t := by
+  revert inc h; simp [Subset]
+  match p, q, t with
+  | [], _, _ => simp [Position.valid]
+  | left::p', left::q', t₁ @@ _ =>
+    simp [Position.valid, Position.Inc]
+    apply validInc
+  | right::p', right::q', _ @@ t₂ =>
+    simp [Position.valid, Position.Inc]
+    apply validInc
+  | _, _::_, var _ => simp [Position.valid]
+  | _, _::_, func _ => simp [Position.valid]
+  | _::_, [], _ => simp [Position.Inc]
+  | right::_, left::_, _ => simp [Position.Inc]
+  | left::_, right::_, _ => simp [Position.Inc]
+
+
+#print Reduces
+#print Rules
+#print Rule
+
+-- This is a compbination of `Reduces.subst` and `Reduces.ax`.
+@[simp]
+def Rule.matchesHead (r : Rule) (t : Term) (σ : Subst) : Prop :=
+  r.lhs.apply σ = t
+
+-- Hey we don't even need the term here!
+@[simp]
+def Rule.rewriteHead (r : Rule) (σ : Subst) : Term := r.rhs.apply σ
+
+-- A little awkward to have to bundle the `p.valid t` proof here.
+def Rule.matchesAt (r : Rule) (t : Term) (p : Position) (σ : Subst) (h : p.valid t) : Prop :=
+  r.matchesHead (p.get t h) σ
+
+def Rule.rewriteAt (r : Rule) (t : Term) (p : Position) (σ : Subst) (h : p.valid t) : Term :=
+  t.substAt p h (r.rewriteHead σ)
+
+-- This is our master theorem to move between the "nice" definition of rewriting to the
+-- position based one, which will allow us to do horrible reasoning about critical pairs.
+theorem rewriteIsRewriteAt {ℛ : Rules} (t t' : RTerm ℛ) (red : t ~> t')
+ : ∃ r ∈ ℛ, ∃ (p : Position) (σ : Subst) (h : p.valid t), t' = r.rewriteAt t p σ h := by
+  sorry
+
 end Position
