@@ -49,7 +49,28 @@ def Term.apply (t : Term) (σ : Subst) : Term :=
 def Subst.scomp (σ : Subst) (τ : Subst) : Subst :=
   fun x => (σ x).apply τ
 
+@[simp]
+lemma Subst.scompApply (σ τ : Subst) (t : Term)
+  : t.apply (σ.scomp τ) = (t.apply σ).apply τ := by
+  induction t <;> simp [apply, Subst.scomp]
+  grind
+
 abbrev Subst.idSubst : Subst := var
+
+@[grind =_]
+lemma Term.subst_id (t : Term) : t = t.apply Subst.idSubst := by induction t <;> grind [Term.apply]
+
+@[simp, grind =]
+lemma idSubst_apply (t : Term) : t.apply Subst.idSubst = t := by grind
+
+@[simp, grind =]
+lemma scompIdsubst (σ : Subst) : σ.scomp Subst.idSubst = σ := by
+  funext; simp [Subst.scomp]
+
+@[simp, grind =]
+lemma scompIdsubst_l (σ : Subst) : Subst.idSubst.scomp σ = σ := by
+  funext; simp [Subst.scomp, apply]
+
 
 #check Finset.disjUnion_eq_union
 #check Finset.instUnion
@@ -70,8 +91,6 @@ def Term.isVar : Term → Bool
 | var _ => true
 | _ => false
 
-@[grind =_]
-lemma Term.subst_id (t : Term) : t = t.apply Subst.idSubst := by induction t <;> grind [Term.apply]
 
 -- Ok let's define equations, and formalize deduction.
 section Equational
@@ -342,16 +361,135 @@ lemma Test.idRed (t : RTerm ℛ) : t ~>* t := by simp [Red.reduces]; grind
 
 #print Ctxt
 #print Rules
+#print Reduces
 
 #check Set.image
 
 def EToR (Γ : Ctxt) : Rules := (fun e => ⟨e.lhs, e.rhs⟩)'' Γ
 def RToE (ℛ : Rules) : Ctxt := (fun e => ⟨e.lhs, e.rhs⟩)'' ℛ
 
-theorem RewIsEq (ℛ : Rules) (t u : RTerm ℛ) (red : t ~>* u) : RToE ℛ ⊢ t ≅ u := by
-  sorry
+@[simp]
+def RTerm.apply {ℛ : Rules} (t : RTerm ℛ) (σ : Subst) : RTerm ℛ := Term.apply t σ
 
-theorem EqIsRew (Γ : Ctxt) (t u : RTerm ℛ) (eqProof : Γ ⊢ t ≅ u) : t <~>* u := by
-  sorry
+lemma Reduces.subst {ℛ : Rules} {t u : RTerm ℛ} (σ : Subst) (red : t ~> u)
+ : t.apply σ ~> u.apply σ := by
+  simp [Red.reduces] at red; induction red <;> simp [apply]
+  case _ l r τ mem =>
+   rw [← Subst.scompApply]; rw [← Subst.scompApply]
+   exact Reduces.head (ℛ := ℛ) (l:=l) (r:=r) (σ := τ.scomp σ) mem
+  case _ => apply Reduces.congrLeft; trivial
+  case _ => apply Reduces.congrRight; trivial
+
+lemma Reduces.substTrans {ℛ : Rules} (t u : RTerm ℛ) (red : t ~>* u)
+ : t.apply σ ~>* u.apply σ := by
+  induction red
+  case _ => constructor
+  case _ a b c red red' ih =>
+    have h := Reduces.subst σ red
+    grind
+
+lemma Reduces.substReflSymTrans {ℛ : Rules} (t u : RTerm ℛ) (red : t <~>* u)
+ : t.apply σ <~>* u.apply σ := by
+  induction red
+  case _ => constructor
+  case _ =>
+    apply refl_trans_sym_clos.base
+    apply Reduces.subst; trivial
+  case _ _ b _ _ _ ih₁ ih₂ =>
+    apply refl_trans_sym_clos.trans (b:=b.apply σ)
+    . apply ih₁
+    . apply ih₂
+  case _ _ _ ih =>
+    apply refl_trans_sym_clos.inv
+    apply ih
+
+def RTerm.app {ℛ} (t₁ t₂ : RTerm ℛ) : RTerm ℛ := t₁ @@ t₂
+
+infix:30 " @@@ " => RTerm.app
+
+-- TODO: do the `~>*` versions also
+
+lemma Reduces.congReflSymTransL {ℛ : Rules}
+ (t₁ t₂ u : RTerm ℛ)
+ (red : t₁ <~>* t₂)
+ : (t₁ @@@ u) <~>* (t₂ @@@ u) := by
+  induction red
+  case _ => constructor
+  case _ =>
+    apply refl_trans_sym_clos.base; constructor; trivial
+  case _ ih₁ ih₂ =>
+    apply refl_trans_sym_clos.trans
+    . apply ih₁
+    . apply ih₂
+  case _ ih => apply refl_trans_sym_clos.inv; apply ih
+
+lemma Reduces.congReflSymTransR {ℛ : Rules}
+ (t u₁ u₂ : RTerm ℛ)
+ (red : u₁ <~>* u₂)
+ : (t @@@ u₁) <~>* (t @@@ u₂) := by
+  induction red
+  case _ => constructor
+  case _ =>
+    apply refl_trans_sym_clos.base; constructor; trivial
+  case _ ih₁ ih₂ =>
+    apply refl_trans_sym_clos.trans
+    . apply ih₁
+    . apply ih₂
+  case _ ih => apply refl_trans_sym_clos.inv; apply ih
+
+lemma Reduces.congReflSymTrans {ℛ : Rules}
+ (t₁ t₂ u₁ u₂ : RTerm ℛ)
+ (red₁ : t₁ <~>* t₂)
+ (red₂ : u₁ <~>* u₂)
+ : (t₁ @@@ u₁) <~>* (t₂ @@@ u₂) := by
+  apply refl_trans_sym_clos.trans (b := t₂ @@@ u₁)
+  . apply Reduces.congReflSymTransL; grind
+  . apply Reduces.congReflSymTransR; grind
+
+lemma RewIsEq_step (ℛ : Rules) (t u : RTerm ℛ) (red : t ~> u) : RToE ℛ ⊢ t ≅ u := by
+  simp [Red.reduces] at red; induction red
+  case _ l r _ mem =>
+    apply Derives.subst; constructor
+    simp [RToE]
+    exists ⟨l, r⟩
+  case _ => apply Derives.congr <;> grind
+  case _ => apply Derives.congr <;> grind
+
+theorem RewIsEq (ℛ : Rules) (t u : RTerm ℛ) (red : t ~>* u) : RToE ℛ ⊢ t ≅ u := by
+  induction red
+  case _ => grind
+  case _ a b c red red' ih =>
+    have h : RToE ℛ ⊢ a ≅ b := by
+      apply RewIsEq_step; grind
+    grind
+
+#print Red
+#print Reduces
+
+theorem EqIsRew_aux (Γ : Ctxt) (eqProof : Γ ⊢ E) :
+  refl_trans_sym_clos (Reduces (EToR Γ)) E.lhs E.rhs := by
+  induction eqProof
+  case _ t u mem =>
+    apply refl_trans_sym_clos.base
+    rw [← idSubst_apply (t:=t), ← idSubst_apply (t:=u)]
+    apply Reduces.head
+    simp [EToR]; exists ⟨t, u⟩
+  case _ => apply refl_trans_sym_clos.refl
+  case _ _ _ _ ih =>
+    apply refl_trans_sym_clos.inv; simp
+    grind
+  case _ =>
+    apply refl_trans_sym_clos.trans <;> simp at * <;> trivial
+  case _ =>
+    simp at *
+    apply Reduces.congReflSymTrans <;> trivial
+  case _ =>
+    simp at *
+    apply Reduces.substReflSymTrans
+    trivial
+
+theorem EqIsRew (Γ : Ctxt) (t u : RTerm (EToR Γ)) (eqProof : Γ ⊢ t ≅ u) : t <~>* u := by
+  simp [Red.reduces]
+  apply EqIsRew_aux (E := ⟨t, u⟩); grind
 
 end Rewriting
