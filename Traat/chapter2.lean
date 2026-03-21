@@ -316,9 +316,9 @@ open Subst
 -- congruence and not all the relfexive transitive stuff.
 @[grind]
 inductive Reduces (ℛ : Rules) : Term → Term → Prop where
-| ax : ⟨l, r⟩ ∈ ℛ → Reduces ℛ l r
-| congr : Reduces ℛ t₁ t₂ → Reduces ℛ u₁ u₂ → Reduces ℛ (t₁ @@ u₁) (t₂ @@ u₂)
-| subst : Reduces ℛ t u → Reduces ℛ (t.apply σ) (u.apply σ)
+| head : ⟨l, r⟩ ∈ ℛ → Reduces ℛ (l.apply σ) (r.apply σ)
+| congrLeft : Reduces ℛ t₁ t₂ → Reduces ℛ (t₁ @@ u) (t₂ @@ u)
+| congrRight : Reduces ℛ u₁ u₂ → Reduces ℛ (t @@ u₁) (t @@ u₂)
 
 -- Let's fix a rewrite system
 variable (ℛ : Rules)
@@ -340,5 +340,18 @@ instance termRed : Red (RTerm ℛ) where
 -- Test lemma
 lemma Test.idRed (t : RTerm ℛ) : t ~>* t := by simp [Red.reduces]; grind
 
+#print Ctxt
+#print Rules
+
+#check Set.image
+
+def EToR (Γ : Ctxt) : Rules := (fun e => ⟨e.lhs, e.rhs⟩)'' Γ
+def RToE (ℛ : Rules) : Ctxt := (fun e => ⟨e.lhs, e.rhs⟩)'' ℛ
+
+theorem RewIsEq (ℛ : Rules) (t u : RTerm ℛ) (red : t ~>* u) : RToE ℛ ⊢ t ≅ u := by
+  sorry
+
+theorem EqIsRew (Γ : Ctxt) (t u : RTerm ℛ) (eqProof : Γ ⊢ t ≅ u) : t <~>* u := by
+  sorry
 
 end Rewriting
