@@ -143,9 +143,9 @@ lemma splitOnSubstConcat {p : Position}
   | _, func _ =>
     simp [Position.splitOnSubst]
 
--- A rewrite at a position that satisfies this predicate is "inner", that is
+-- A rewrite at a position that satisfies this predicate is "outer", that is
 -- it occurs only within substituted terms.
-def IsInnerPosition (p : Position) (t : Term) (σ : Subst) : Bool :=
+def IsOuterPosition (p : Position) (t : Term) (σ : Subst) : Bool :=
   let ⟨p, _⟩ := p.splitOnSubst t σ
   if h : (p.valid t) then p.get t h |>.isVar else false
 
@@ -200,6 +200,33 @@ match p, q with
 instance Position.instHasSubset : HasSubset Position where
   Subset p q := Position.Inc p q
 
+@[simp]
+lemma subsetHead {p : Position} : [] ⊆ p := by
+  simp [Subset, Position.Inc]
+
+@[simp]
+lemma subsetNotHead {p : Position} : ¬ m::p ⊆ [] := by
+  simp [Subset, Position.Inc]
+
+@[simp]
+lemma subsetTail {p q : Position} : (m::p ⊆ m::q) = (p ⊆ q) := by
+  cases m
+  . match p, q with
+    | [], _ => simp [Subset, Position.Inc]
+    | left::p', left::q' => simp [Subset, Position.Inc]
+    | right::p', right::q' => simp [Subset, Position.Inc]
+    | _, _ => simp [Subset, Position.Inc]
+  . match p, q with
+    | [], _ => simp [Subset, Position.Inc]
+    | left::p', left::q' => simp [Subset, Position.Inc]
+    | right::p', right::q' => simp [Subset, Position.Inc]
+    | _, _ => simp [Subset, Position.Inc]
+
+@[grind .]
+lemma subsetNotTail {p q : Position} (h : m ≠ n) : ¬ (m::p ⊆ n::q) := by
+  revert h
+  cases m <;> cases n <;> simp [Subset, Position.Inc]
+
 -- A little tedium here
 @[grind →]
 lemma validInc {p q : Position} (h : q.valid t) (inc : p ⊆ q)
@@ -219,6 +246,79 @@ lemma validInc {p q : Position} (h : q.valid t) (inc : p ⊆ q)
   | right::_, left::_, _ => simp [Position.Inc]
   | left::_, right::_, _ => simp [Position.Inc]
 
+#check SDiff
+
+def Position.sdiff (p q : Position) : Position :=
+  match p, q with
+  | _, [] => p
+  | [], _ => []
+  | left::p', left::q' => Position.sdiff p' q'
+  | right::p', right::q' => Position.sdiff p' q'
+  | _, _ => p
+
+instance Position.instSDiff : SDiff Position where
+  sdiff := Position.sdiff
+
+@[simp]
+lemma sdiffHead₁ {p : Position} : p \ [] = p := by
+  induction p <;> simp [Position.instSDiff, Position.sdiff]
+
+@[simp]
+lemma sdiffHead₂ {p : Position} : [] \ p = [] := by
+  induction p <;> simp [Position.instSDiff, Position.sdiff]
+
+@[simp]
+lemma sdiffCons {p q : Position} {m : Move} : (m::p) \ (m::q) = p \ q := by
+  cases m <;> simp [Position.instSDiff, Position.sdiff]
+
+@[simp]
+lemma sdiffEmpty {p : Position} : (p \ p) = [] := by
+  induction p <;> simp; trivial
+
+lemma sdiffSum {p q : Position} (inc : p ⊆ q) : q = p ++ (q \ p) := by
+  revert inc
+  cases p <;> cases q <;> simp
+  case cons.cons m _ n _ =>
+    by_cases h:(m = n)
+    . simp [h]; apply sdiffSum
+    . grind
+
+def Position.IsOrtho (p q : Position) : Bool :=
+  match p, q with
+  | left::_, right::_ => true
+  | right::_, left::_ => true
+  | left::p', left::q'
+  | right::p', right::q' => Position.IsOrtho p' q'
+  | _, _ => false
+
+infix:50 " ⊥ " => Position.IsOrtho
+
+@[grind =]
+lemma isOrthoCons (h : m ≠ n) : (m::p) ⊥ (n::q) := by
+  revert h; cases m <;> cases n <;> simp [Position.IsOrtho]
+
+@[simp]
+lemma isOrthoCons' : ((m::p) ⊥ (m::q)) = (p ⊥ q) := by
+  cases m <;> simp [Position.IsOrtho]
+
+@[grind .]
+lemma isOrthoNil : ¬ ([] ⊥ p) := by
+  cases p <;> simp [Position.IsOrtho]
+
+@[grind .]
+lemma isOrthoNil' : ¬ (p ⊥ []) := by
+  cases p <;> simp [Position.IsOrtho]
+
+lemma trichotomy {p q : Position} : p ⊆ q ∨ q ⊆ p ∨ p ⊥ q := by
+  cases p <;> cases q <;> try simp
+  case cons.cons m _ n _ =>
+    by_cases h:(m = n)
+    . simp [h]; apply trichotomy
+    . grind
+
+end Position
+
+open Position Move Term
 
 #print Reduces
 #print Rules
@@ -249,7 +349,7 @@ theorem rewriteIsRewriteAt {ℛ : Rules} (t t' : RTerm ℛ) (red : t ~> t')
   case _ l r σ mem =>
     exists ⟨l, r⟩; apply And.intro; trivial
     exists []; exists σ; exists rfl
-    simp [Rule.rewriteAt, substAt]
+    simp [Rule.rewriteAt, Term.substAt]
   case _ ih =>
     let ⟨r, ⟨mem, ⟨p, ⟨σ, ⟨h, eq⟩⟩⟩⟩⟩ := ih
     exists r; apply And.intro; trivial
@@ -265,4 +365,47 @@ theorem rewriteIsRewriteAt {ℛ : Rules} (t t' : RTerm ℛ) (red : t ~> t')
     simp [Rule.rewriteAt] at eq
     trivial
 
-end Position
+-- A subtitution at an orthogonal position does not change validity
+lemma orthValidL {p q : Position} (h₁ : p.valid t) (h₂ : q.valid t) (orth : p ⊥ q) :
+  p.valid (t.substAt q h₂ u) := by
+  revert h₁ h₂ orth
+  match p, q, t with
+  | [], _, _ => grind
+  | _, [], _ => grind
+  | m::p', n::q', t₁ @@ t₂ =>
+    cases m <;> cases n <;> simp [valid, substAt] <;> try grind
+    . apply orthValidL
+    . apply orthValidL
+  | _::_, _::_, var _ => grind
+  | _::_, _::_, func _ => grind
+
+lemma orthValidR {p q : Position} (h₁ : p.valid t) (h₂ : q.valid t) (orth : p ⊥ q) :
+  q.valid (t.substAt p h₁ u) := by
+  revert h₁ h₂ orth
+  match p, q, t with
+  | [], _, _ => grind
+  | _, [], _ => grind
+  | m::p', n::q', t₁ @@ t₂ =>
+    cases m <;> cases n <;> simp [valid, substAt] <;> try grind
+    . apply orthValidR
+    . apply orthValidR
+  | _::_, _::_, var _ => grind
+  | _::_, _::_, func _ => grind
+
+-- rewriting at orthogonal positions commutes
+lemma orthCommutes {ru₁ ru₂ : Rule} {p q : Position}
+  (h₁ : p.valid t)
+  (h₂ : q.valid t)
+  (orth : p ⊥ q)
+  : ru₂.rewriteAt (ru₁.rewriteAt t p σ h₁) q τ (orthValidR h₁ h₂ orth) =
+    ru₁.rewriteAt (ru₂.rewriteAt t q τ h₂) p σ (orthValidL h₁ h₂ orth) := by
+  revert h₁ h₂ orth
+  match p, q, t with
+  | [], _, _ => grind
+  | _, [], _ => grind
+  | m::p', n::q', t₁ @@ t₂ =>
+    cases m <;> cases n <;> simp [valid, Rule.rewriteAt, substAt] <;> intros
+    . apply orthCommutes; trivial
+    . apply orthCommutes; trivial
+  | _::_, _::_, var _ => grind
+  | _::_, _::_, func _ => grind

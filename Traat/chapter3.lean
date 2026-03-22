@@ -39,13 +39,6 @@ lemma varsSubApply₂ (t₁ t₂ : Term) : t₂.vars ⊆ (t₁ @@ t₂).vars := 
 lemma substDom (t : Term) (σ τ : Subst) (h : ∀ x ∈ t.vars, σ x = τ x) : t.apply σ = t.apply τ := by
   induction t <;> simp [Term.apply, Term.vars] at * <;> grind only
 
-@[simp, grind =]
-lemma idSubst_apply (t : Term) : t.apply idSubst = t := by grind
-
-@[simp, grind =]
-lemma scompIdsubst (σ : Subst) : σ.scomp idSubst = σ := by
-  funext; simp [scomp]
-
 lemma varDom (t : Term) (σ : Subst) (h : Disjoint σ.dom t.vars) : t.apply σ = t := by
   have h' : t = t.apply idSubst := by grind
   have h'' : ∀ x ∈ t.vars, σ x = idSubst x := by
@@ -498,12 +491,6 @@ lemma unifierVarUnifConstrSubst (σ : Subst) (x : Var) (t : Term) l
     intros _ h; constructor
     . grind [unifierVarUnifSubst]
     . apply ih; apply h
-
-@[simp]
-lemma Subst.scompApply (σ τ : Subst) (t : Term)
-  : t.apply (σ.scomp τ) = (t.apply σ).apply τ := by
-  induction t <;> simp [apply, Subst.scomp]
-  grind
 
 lemma idempCompVarSubst (σ : Subst) x (t : Term)
   (h : σ x = t.apply σ)
