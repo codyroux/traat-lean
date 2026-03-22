@@ -244,6 +244,25 @@ def Rule.rewriteAt (r : Rule) (t : Term) (p : Position) (σ : Subst) (h : p.vali
 -- position based one, which will allow us to do horrible reasoning about critical pairs.
 theorem rewriteIsRewriteAt {ℛ : Rules} (t t' : RTerm ℛ) (red : t ~> t')
  : ∃ r ∈ ℛ, ∃ (p : Position) (σ : Subst) (h : p.valid t), t' = r.rewriteAt t p σ h := by
-  sorry
+  simp [Red.reduces] at red
+  induction red
+  case _ l r σ mem =>
+    exists ⟨l, r⟩; apply And.intro; trivial
+    exists []; exists σ; exists rfl
+    simp [Rule.rewriteAt, substAt]
+  case _ ih =>
+    let ⟨r, ⟨mem, ⟨p, ⟨σ, ⟨h, eq⟩⟩⟩⟩⟩ := ih
+    exists r; apply And.intro; trivial
+    exists (left::p); exists σ; exists h
+    simp [Rule.rewriteAt, substAt]
+    simp [Rule.rewriteAt] at eq
+    trivial
+  case _ ih =>
+    let ⟨r, ⟨mem, ⟨p, ⟨σ, ⟨h, eq⟩⟩⟩⟩⟩ := ih
+    exists r; apply And.intro; trivial
+    exists (right::p); exists σ; exists h
+    simp [Rule.rewriteAt, substAt]
+    simp [Rule.rewriteAt] at eq
+    trivial
 
 end Position
