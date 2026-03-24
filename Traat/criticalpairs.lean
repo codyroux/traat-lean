@@ -299,7 +299,7 @@ lemma isOrthoCons (h : m ≠ n) : (m::p) ⊥ (n::q) := by
 
 @[simp]
 lemma isOrthoCons' : ((m::p) ⊥ (m::q)) = (p ⊥ q) := by
-  cases m <;> simp [Position.IsOrtho]
+  cases m <;> simp only [Position.IsOrtho]
 
 @[grind .]
 lemma isOrthoNil : ¬ ([] ⊥ p) := by
@@ -392,7 +392,38 @@ lemma orthValidR {p q : Position} (h₁ : p.valid t) (h₂ : q.valid t) (orth : 
   | _::_, _::_, var _ => grind
   | _::_, _::_, func _ => grind
 
+lemma substAtgetOrth' {p q : Position}
+  (h₁ : p.valid t)
+  (h₂ : q.valid t)
+  (orth : p ⊥ q)
+  (h₂' : q.valid (t.substAt p h₁ u))
+ : q.get (t.substAt p h₁ u) h₂' = q.get t h₂ := by
+  revert h₁ h₂ orth h₂'
+  match p, q, t with
+  | [], _, _ => simp [IsOrtho]
+  | _, [], _ => simp [IsOrtho]
+  | left::_, right::_, _ @@ _ =>
+    simp [Position.get, Term.substAt]
+  | right::_, left::_, _ @@ _ =>
+    simp [Position.get, Term.substAt]
+  | left::_, left::_, _ @@ _ =>
+    simp [IsOrtho, Position.get, Term.substAt]
+    intros; apply substAtgetOrth'; grind
+  | right::_, right::_, _ @@ _ =>
+    simp [IsOrtho, Position.get, Term.substAt]
+    intros; apply substAtgetOrth'; grind
+  | _::_, _::_, var _ => simp [valid]
+  | _::_, _::_, func _ => simp [valid]
+
+
+lemma substAtgetOrth {p q : Position}
+  (h₁ : p.valid t)
+  (h₂ : q.valid t)
+  (orth : p ⊥ q)
+ : q.get (t.substAt p h₁ u) (orthValidR h₁ h₂ orth) = q.get t h₂ := by grind [substAtgetOrth']
+
 -- rewriting at orthogonal positions commutes
+-- FIXME: rename this
 lemma orthCommutes {ru₁ ru₂ : Rule} {p q : Position}
   (h₁ : p.valid t)
   (h₂ : q.valid t)
@@ -409,3 +440,181 @@ lemma orthCommutes {ru₁ ru₂ : Rule} {p q : Position}
     . apply orthCommutes; trivial
   | _::_, _::_, var _ => grind
   | _::_, _::_, func _ => grind
+
+-- Basically, if `rw₁` happens at the root, and `rw₂` happens
+-- beneath a leaf of the lhs, then
+-- the rewrites weakly commute.
+-- To be able to prove this, I need some facts about the variable positions and how
+-- they change from lhs to rhs.
+
+-- Idea: get all the positions of a given variable `x`, show that all of them are orthogonal,
+-- and show that `varSubst x t` is equal to substituting all of them 1 after another.
+
+private abbrev Position.join (ps₁ ps₂ : List Position) : List Position :=
+  (ps₁.map (left :: ·)) ++ (ps₂.map (right :: ·))
+
+def varPos (t : Term) (x : Var) : List Position :=
+  match t with
+  | var y => if y = x then [[]] else [] -- bit confusing
+  | func _ => []
+  | t₁ @@ t₂ => Position.join (varPos t₁ x) (varPos t₂ x)
+
+@[grind .]
+lemma isValidVarPos : ∀ p ∈ varPos t x, p.valid t := by
+  induction t <;> simp [varPos, valid]
+  case _ t₁ t₂ ih₁ ih₂ =>
+    intros p shape
+    rcases shape with ⟨a, h₁, h₂⟩ | ⟨a, h₁, h₂⟩
+    . rw [← h₂]; simp [valid]; grind
+    . rw [← h₂]; simp [valid]; grind
+
+@[grind →]
+lemma isVarVarPos'
+  (p : Position)
+  (mem : p ∈ varPos t x)
+  (h : p.valid t)
+  : p.get t h = var x := by
+  revert mem h p
+  induction t <;> simp [varPos, valid]
+  case _ =>
+    intros eq
+    simp [Position.get]; trivial
+  case _ t₁ t₂ ih₁ ih₂ =>
+    intros p shape
+    rcases shape with ⟨a, h₁, h₂⟩ | ⟨a, h₁, h₂⟩
+    . rw [← h₂]; simp [valid, Position.get]; grind
+    . rw [← h₂]; simp [valid, Position.get]; grind
+
+lemma isVarVarPos {p : Position} (mem : p ∈ varPos t x)
+  : p.get t (isValidVarPos p mem) = var x := by
+  grind [isVarVarPos']
+
+-- Sheesh this is awkward
+lemma orthLeaf
+  (h₁ : p.valid t) (h₂ : q.valid t)
+  (isVar₁ : p.get t h₁ |>.isVar)
+  (isVar₂ : q.get t h₂ |>.isVar)
+  (neq : p ≠ q) : p ⊥ q := by
+  match p, q, t with
+  | left::_, right::_, t₁ @@ t₂ => grind
+  | right::_, left::_, t₁ @@ t₂ => grind
+  | right::_, right::_, t₁ @@ t₂ =>
+    simp; simp [Position.get] at isVar₁; simp [Position.get] at isVar₂; simp at neq
+    apply orthLeaf (t:=t₂) <;> trivial
+  | left::_, left::_, t₁ @@ t₂ =>
+    simp; simp [Position.get] at isVar₁; simp [Position.get] at isVar₂; simp at neq
+    apply orthLeaf (t:=t₁) <;> trivial
+  | [], [], _ => grind
+  | _::_, [], t₁ @@ t₂ => simp [isVar, Position.get] at isVar₂
+  | [], _::_, t₁ @@ t₂ => simp [isVar, Position.get] at isVar₁
+
+lemma orthVarPos : ∀ p ∈ varPos t x, ∀ q ∈ varPos t x, p ≠ q → p ⊥ q := by
+  intros p mem₁ q mem₂ neq; apply orthLeaf <;> try trivial
+  . rw [isVarVarPos']
+    . simp [isVar]
+    . trivial
+    . grind
+  . rw [isVarVarPos']
+    . simp [isVar]
+    . trivial
+    . grind
+
+#check List.pairwise_iff_get
+#check List.nodup_append
+#check List.nodup_map_iff
+
+lemma nodupVarPos : (varPos t x).Nodup := by
+  cases t <;> simp [varPos]
+  . grind
+  . rw [List.nodup_append]
+    constructor
+    . rw [List.nodup_map_iff (f := fun l => left::l)]
+      . apply nodupVarPos
+      . simp
+    . constructor
+      . rw [List.nodup_map_iff (f := fun l => right::l)]
+        . apply nodupVarPos
+        . simp
+      . simp only [List.mem_map,
+         ne_eq, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂,
+         List.cons.injEq, reduceCtorEq, false_and, not_false_eq_true,
+         implies_true] -- holy crap
+
+#check List.removeAll
+#check List.Nodup
+#check List.dedup
+#check List.nodup_dedup
+#check List.nodup_map_iff
+#check Finset.Nonempty
+#check Finset.choose
+
+
+def Term.substAll (t u : Term) (ps : List Position)
+  (nodups : ps.Nodup)
+  (h : ∀ p ∈ ps, p.valid t)
+  (orth : ∀ p ∈ ps, ∀ q ∈ ps, p ≠ q → p ⊥ q)
+  : Term :=
+  match ps with
+  | [] => t
+  | p::ps' =>
+    Term.substAll
+      (t.substAt p (by grind) u)
+      u ps'
+      (by grind)
+      (by
+        simp at *;
+        have h' : ∀ p' ∈ ps', p ⊥ p' := by grind -- wow
+        intros; grind [orthValidR])
+      (by grind)
+
+-- Need some algebraic fact about `(t₁ @@ t₂).substAll u (varPos (t₁ @@ t₂) x)`.
+-- or just `(t₁ @@ t₂). substAll u |> (ps₁.map (left :: ·)) ++ (ps₂.map (right :: · ))`
+
+private lemma substAllMapRight
+  : (t₁ @@ t₂).substAll u (List.map (fun x => right :: x) ps) nodup' h' orth' =
+    (t₁ @@ t₂.substAll u ps nodup h orth) := by
+  revert t₂
+  induction ps <;> intros
+  . simp; eq_refl -- proof irrelevance saves the day
+  case _ ih _ _ _ =>
+    simp [substAll, substAt]
+    apply ih
+
+private lemma substAllAppDecomp {ps₁ ps₂ : List Position}
+  (nodup₁ : ps₁.Nodup)
+  (nodup₂ : ps₂.Nodup)
+  (nodup : Position.join ps₁ ps₂ |>.Nodup) -- provable
+  (h₁ : ∀ p ∈ ps₁, p.valid t₁)
+  (h₂ : ∀ p ∈ ps₂, p.valid t₂)
+  (h : ∀ p ∈ Position.join ps₁ ps₂, p.valid (t₁ @@ t₂)) -- provable
+  (orth₁ : ∀ p ∈ ps₁, ∀ q ∈ ps₁, p ≠ q → p ⊥ q)
+  (orth₂ : ∀ p ∈ ps₂, ∀ q ∈ ps₂, p ≠ q → p ⊥ q)
+  (orth : ∀ p ∈ (Position.join ps₁ ps₂), ∀ q ∈ Position.join ps₁ ps₂, p ≠ q → p ⊥ q) -- provable
+  : (t₁ @@ t₂).substAll u (join ps₁ ps₂) nodup h orth =
+    ((t₁.substAll u ps₁ nodup₁ h₁ orth₁) @@ (t₂.substAll u ps₂ nodup₂ h₂ orth₂)) := by
+  revert t₁
+  induction ps₁ <;> intros
+  . simp [join, substAll]
+    apply substAllMapRight
+  case _ ih _ _ _ =>
+    simp [join, substAll, substAt]
+    apply ih -- again, proof irrelevance
+
+theorem substAllIsVarSubst (t u : Term) (x : Var) :
+  t.substAll u (varPos t x) nodupVarPos isValidVarPos orthVarPos =
+  t.apply (varSubst x u) := by
+  induction t
+  case _ y =>
+    simp [varPos, apply, varSubst]
+    by_cases h:(y = x) <;> simp [h, substAll, substAt]
+  case _ => simp [substAll, apply, varPos]
+  case _ ih₁ ih₂ =>
+    simp [varPos, apply]
+    rw [substAllAppDecomp] -- now we pay the piper for all those hyps
+    . congr
+    . apply nodupVarPos
+    . apply nodupVarPos
+    . apply isValidVarPos
+    . apply isValidVarPos
+    . apply orthVarPos
+    . apply orthVarPos
