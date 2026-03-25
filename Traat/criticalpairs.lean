@@ -5,6 +5,7 @@ section Position
 #print Option
 
 inductive Move where | left | right
+  deriving BEq, Repr
 
 open Move Term
 
@@ -337,7 +338,11 @@ def Rule.rewriteHead (r : Rule) (σ : Subst) : Term := r.rhs.apply σ
 def Rule.matchesAt (r : Rule) (t : Term) (p : Position) (σ : Subst) (h : p.valid t) : Prop :=
   r.matchesHead (p.get t h) σ
 
-def Rule.rewriteAt (r : Rule) (t : Term) (p : Position) (σ : Subst) (h : p.valid t) : Term :=
+def Rule.rewriteAt
+  (r : Rule)
+  (t : RTerm ℛ)
+  (p : Position)
+  (σ : Subst) (h : p.valid t) : RTerm ℛ :=
   t.substAt p h (r.rewriteHead σ)
 
 -- This is our master theorem to move between the "nice" definition of rewriting to the
@@ -364,6 +369,20 @@ theorem rewriteIsRewriteAt {ℛ : Rules} (t t' : RTerm ℛ) (red : t ~> t')
     simp [Rule.rewriteAt, substAt]
     simp [Rule.rewriteAt] at eq
     trivial
+
+@[simp]
+lemma substValid {t : Term} {p : Position}
+  (h : p.valid t)
+  : p.valid (t.substAt p h u) := by
+  revert h
+  match p, t with
+  | [], _ => simp [valid]
+  | left::_, _ @@ _ => simp [valid, substAt]; apply substValid
+  | right::_, _ @@ _ => simp [valid, substAt]; apply substValid
+  | left::_, var _ => simp [valid]
+  | right::_, var _ => simp [valid]
+  | left::_, func _ => simp [valid]
+  | right::_, func _ => simp [valid]
 
 -- A subtitution at an orthogonal position does not change validity
 lemma orthValidL {p q : Position} (h₁ : p.valid t) (h₂ : q.valid t) (orth : p ⊥ q) :
@@ -420,26 +439,40 @@ lemma substAtgetOrth {p q : Position}
   (h₁ : p.valid t)
   (h₂ : q.valid t)
   (orth : p ⊥ q)
- : q.get (t.substAt p h₁ u) (orthValidR h₁ h₂ orth) = q.get t h₂ := by grind [substAtgetOrth']
+  : q.get (t.substAt p h₁ u) (orthValidR h₁ h₂ orth) = q.get t h₂ := by
+  grind [substAtgetOrth']
 
--- rewriting at orthogonal positions commutes
--- FIXME: rename this
-lemma orthCommutes {ru₁ ru₂ : Rule} {p q : Position}
+lemma substOrth
+  {p q : Position}
+  (t u₁ u₂ : Term)
   (h₁ : p.valid t)
   (h₂ : q.valid t)
   (orth : p ⊥ q)
-  : ru₂.rewriteAt (ru₁.rewriteAt t p σ h₁) q τ (orthValidR h₁ h₂ orth) =
-    ru₁.rewriteAt (ru₂.rewriteAt t q τ h₂) p σ (orthValidL h₁ h₂ orth) := by
+  : (t.substAt p h₁ u₁).substAt q (orthValidR h₁ h₂ orth) u₂ =
+    (t.substAt q h₂ u₂).substAt p (orthValidL h₁ h₂ orth) u₁ := by
   revert h₁ h₂ orth
   match p, q, t with
   | [], _, _ => grind
   | _, [], _ => grind
   | m::p', n::q', t₁ @@ t₂ =>
-    cases m <;> cases n <;> simp [valid, Rule.rewriteAt, substAt] <;> intros
-    . apply orthCommutes; trivial
-    . apply orthCommutes; trivial
+    cases m <;> cases n <;> simp [valid, substAt] <;> intros
+    . apply substOrth; trivial
+    . apply substOrth; trivial
   | _::_, _::_, var _ => grind
   | _::_, _::_, func _ => grind
+
+-- rewriting at orthogonal positions commutes
+-- FIXME: rename this
+lemma orthCommutes
+  {ru₁ ru₂ : Rule}
+  {p q : Position}
+  (t : RTerm ℛ)
+  (h₁ : p.valid t)
+  (h₂ : q.valid t)
+  (orth : p ⊥ q)
+  : ru₂.rewriteAt (ru₁.rewriteAt t p σ h₁) q τ (orthValidR h₁ h₂ orth) =
+    ru₁.rewriteAt (ru₂.rewriteAt t q τ h₂) p σ (orthValidL h₁ h₂ orth) := by
+  grind [Rule.rewriteAt, substOrth]
 
 -- Basically, if `rw₁` happens at the root, and `rw₂` happens
 -- beneath a leaf of the lhs, then
@@ -489,6 +522,21 @@ lemma isVarVarPos {p : Position} (mem : p ∈ varPos t x)
   : p.get t (isValidVarPos p mem) = var x := by
   grind [isVarVarPos']
 
+lemma varPosComplete {p : Position} {h : p.valid t}
+  (isVar : p.get t h = var x) : p ∈ varPos t x := by
+  revert p
+  induction t
+  case _ y =>
+    simp [varPos]; intros p
+    cases p  -- <;> grind [Position.get] -- internal `grind` error, term has not been internalized valid (left :: tail) (t₁✝ @@ a✝)
+    . simp [Position.get]
+    . simp [valid]
+  case _ => intros p; cases p <;> simp [Position.get]
+  case _ =>
+    intros p; cases p; simp [Position.get]
+    case _ hd tail =>
+      cases hd <;> simp [Position.get, varPos] <;> grind
+
 -- Sheesh this is awkward
 lemma orthLeaf
   (h₁ : p.valid t) (h₂ : q.valid t)
@@ -519,10 +567,7 @@ lemma orthVarPos : ∀ p ∈ varPos t x, ∀ q ∈ varPos t x, p ≠ q → p ⊥
     . trivial
     . grind
 
-#check List.pairwise_iff_get
-#check List.nodup_append
-#check List.nodup_map_iff
-
+-- We used to need this now it's just for free...
 lemma nodupVarPos : (varPos t x).Nodup := by
   cases t <;> simp [varPos]
   . grind
@@ -540,17 +585,8 @@ lemma nodupVarPos : (varPos t x).Nodup := by
          List.cons.injEq, reduceCtorEq, false_and, not_false_eq_true,
          implies_true] -- holy crap
 
-#check List.removeAll
-#check List.Nodup
-#check List.dedup
-#check List.nodup_dedup
-#check List.nodup_map_iff
-#check Finset.Nonempty
-#check Finset.choose
-
 
 def Term.substAll (t u : Term) (ps : List Position)
-  (nodups : ps.Nodup)
   (h : ∀ p ∈ ps, p.valid t)
   (orth : ∀ p ∈ ps, ∀ q ∈ ps, p ≠ q → p ⊥ q)
   : Term :=
@@ -560,19 +596,20 @@ def Term.substAll (t u : Term) (ps : List Position)
     Term.substAll
       (t.substAt p (by grind) u)
       u ps'
-      (by grind)
       (by
-        simp at *;
-        have h' : ∀ p' ∈ ps', p ⊥ p' := by grind -- wow
-        intros; grind [orthValidR])
+        simp at h
+        have h' : ∀ p' ∈ ps', p ≠ p' → p ⊥ p' := by grind -- wow
+        intros p'
+        by_cases h'':(p' = p); simp [h'']
+        grind [orthValidL])
       (by grind)
 
 -- Need some algebraic fact about `(t₁ @@ t₂).substAll u (varPos (t₁ @@ t₂) x)`.
 -- or just `(t₁ @@ t₂). substAll u |> (ps₁.map (left :: ·)) ++ (ps₂.map (right :: · ))`
 
 private lemma substAllMapRight
-  : (t₁ @@ t₂).substAll u (List.map (fun x => right :: x) ps) nodup' h' orth' =
-    (t₁ @@ t₂.substAll u ps nodup h orth) := by
+  : (t₁ @@ t₂).substAll u (List.map (fun x => right :: x) ps) h' orth' =
+    (t₁ @@ t₂.substAll u ps h orth) := by
   revert t₂
   induction ps <;> intros
   . simp; eq_refl -- proof irrelevance saves the day
@@ -581,17 +618,14 @@ private lemma substAllMapRight
     apply ih
 
 private lemma substAllAppDecomp {ps₁ ps₂ : List Position}
-  (nodup₁ : ps₁.Nodup)
-  (nodup₂ : ps₂.Nodup)
-  (nodup : Position.join ps₁ ps₂ |>.Nodup) -- provable
   (h₁ : ∀ p ∈ ps₁, p.valid t₁)
   (h₂ : ∀ p ∈ ps₂, p.valid t₂)
   (h : ∀ p ∈ Position.join ps₁ ps₂, p.valid (t₁ @@ t₂)) -- provable
   (orth₁ : ∀ p ∈ ps₁, ∀ q ∈ ps₁, p ≠ q → p ⊥ q)
   (orth₂ : ∀ p ∈ ps₂, ∀ q ∈ ps₂, p ≠ q → p ⊥ q)
   (orth : ∀ p ∈ (Position.join ps₁ ps₂), ∀ q ∈ Position.join ps₁ ps₂, p ≠ q → p ⊥ q) -- provable
-  : (t₁ @@ t₂).substAll u (join ps₁ ps₂) nodup h orth =
-    ((t₁.substAll u ps₁ nodup₁ h₁ orth₁) @@ (t₂.substAll u ps₂ nodup₂ h₂ orth₂)) := by
+  : (t₁ @@ t₂).substAll u (join ps₁ ps₂) h orth =
+    ((t₁.substAll u ps₁ h₁ orth₁) @@ (t₂.substAll u ps₂ h₂ orth₂)) := by
   revert t₁
   induction ps₁ <;> intros
   . simp [join, substAll]
@@ -601,7 +635,7 @@ private lemma substAllAppDecomp {ps₁ ps₂ : List Position}
     apply ih -- again, proof irrelevance
 
 theorem substAllIsVarSubst (t u : Term) (x : Var) :
-  t.substAll u (varPos t x) nodupVarPos isValidVarPos orthVarPos =
+  t.substAll u (varPos t x) isValidVarPos orthVarPos =
   t.apply (varSubst x u) := by
   induction t
   case _ y =>
@@ -612,9 +646,53 @@ theorem substAllIsVarSubst (t u : Term) (x : Var) :
     simp [varPos, apply]
     rw [substAllAppDecomp] -- now we pay the piper for all those hyps
     . congr
-    . apply nodupVarPos
-    . apply nodupVarPos
     . apply isValidVarPos
     . apply isValidVarPos
     . apply orthVarPos
     . apply orthVarPos
+
+-- Since orthogonal substs commute, inserting a subst into the list is the same as doing it first
+
+#check List.filter
+
+-- let's first prove that rewriting at a variable reduces to rewriting at all positions of that var,
+-- in 2 steps: first that rewriting at the position, then the rest of the list, is the
+-- same as rewriting all at once. Then prove that a rewrite at any position is the same as
+-- rewriting at some element of the `varPos` list.
+
+lemma substAtIdem {t : Term}
+  (h : p.valid t)
+  (h' : p.valid (t.substAt p h u)) -- this can be proven
+  : (t.substAt p h u).substAt p h' u = t.substAt p h u := by
+  sorry
+
+lemma rewriteAtIsRewrite {t : RTerm ℛ}
+  {mem : ru ∈ ℛ}
+  (h : p.valid t)
+  (mtch : ru.matchesAt t p σ h)
+  : t ~> ru.rewriteAt t p σ h := by
+  revert mtch
+  match p, t with
+  | [], _ =>
+    simp [Rule.matchesAt, Position.get, Rule.rewriteAt, substAt]
+    intros h; simp [← h]
+    apply Reduces.head; trivial
+  | left::p', t₁ @@ _ =>
+    simp [Rule.matchesAt, Position.get, Rule.rewriteAt, substAt]
+    intro mtch; apply Reduces.congrLeft
+    apply rewriteAtIsRewrite <;> trivial
+  | right::p', _ @@ t₂ =>
+    simp [Rule.matchesAt, Position.get, Rule.rewriteAt, substAt]
+    intro mtch; apply Reduces.congrRight
+    apply rewriteAtIsRewrite <;> trivial
+
+
+lemma foo {t : Term} (mem : p ∈ ps)
+  : t.substAll u (p::ps) _ _ = t.substAll u ps _ _ := by sorry
+
+lemma rewriteAtVarIsSubst {ℛ : Rules} {t : RTerm ℛ} {p : Position} {ru : Rule}
+  (mem : ru ∈ ℛ)
+  (h : p.valid t)
+  (h' : p.get t h = var x)
+  : ru.rewriteAt (t.apply τ) p σ (validSubst _ _ τ h) ~>*
+    t.apply (varSubst x (ru.rhs.apply σ) |>.join τ) := by sorry
