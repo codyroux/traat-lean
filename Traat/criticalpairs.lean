@@ -725,6 +725,20 @@ lemma rewriteAtIsRewrite' {t : RTerm ℛ}
   rw [← eq]
   apply refl_trans_clos.refl
 
+#check substOrth'
+
+lemma substAllSwap {t : Term}
+  (orth : p ⊥ q)
+  (allValid₁ : ∀ p' ∈ p::q::ps, p'.valid t)
+  (allOrth₁ : ∀ p' ∈ p::q::ps, ∀ p'' ∈ p::q::ps, p' ≠ p'' → p' ⊥ p'')
+  (allValid₂ : ∀ p' ∈ q::p::ps, p'.valid t)
+  (allOrth₂ : ∀ p' ∈ q::p::ps, ∀ p'' ∈ q::p::ps, p' ≠ p'' → p' ⊥ p'')
+  : t.substAll u (p::q::ps) allValid₁ allOrth₁ =
+    t.substAll u (q::p::ps) allValid₂ allOrth₂ := by
+  simp [substAll]
+  congr 1
+  apply substOrth'; grind
+
 lemma substAllIdem {t : Term}
   (h₁ : ∀ p' ∈ ps, p'.valid t)
   (h₂ : ∀ p' ∈ p::ps, p'.valid t)
@@ -732,12 +746,20 @@ lemma substAllIdem {t : Term}
   (orth₂ : ∀ p' ∈ p::ps, ∀ p'' ∈ p::ps, p' ≠ p'' → p' ⊥ p'')
   (mem : p ∈ ps)
   : t.substAll u (p::ps) h₂ orth₂ = t.substAll u ps h₁ orth₁ := by
+  revert t
   induction ps
   case _ => simp at mem
   case _ hd tail ih =>
     by_cases h:(p = hd)
     . simp [h, substAll, substAtIdem]
-    . sorry
+    . intros
+      have h' : p ⊥ hd := by grind
+      rw [substAllSwap] <;> try grind
+      . simp [substAll]
+        apply ih <;> try grind
+        . simp; constructor
+          . apply orthValidL <;> grind
+          . grind [substValidList]
 
 lemma rewriteAtSubstAll {ℛ : Rules} {t : RTerm ℛ} {p : Position} {ru : Rule}
   (mem : ru ∈ ℛ)
@@ -748,7 +770,8 @@ lemma rewriteAtSubstAll {ℛ : Rules} {t : RTerm ℛ} {p : Position} {ru : Rule}
   (mtch : ∀ p' (mem : p' ∈ ps), ru.matchesAt t p' σ (allValid p' mem))
   (allOrth : ∀ p ∈ ps, ∀ q ∈ ps, p ≠ q → (p ⊥ q))
   : ru.rewriteAt t p σ h ~>*
-  t.substAll (ru.rhs.apply σ) ps allValid allOrth := by sorry
+  t.substAll (ru.rhs.apply σ) ps allValid allOrth := by
+  sorry
 
 -- Do I even need this one?
 lemma rewriteAtVarIsSubst_aux {ℛ : Rules} {t : RTerm ℛ} {p : Position} {ru : Rule}
