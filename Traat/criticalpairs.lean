@@ -442,6 +442,27 @@ lemma substAtgetOrth {p q : Position}
   : q.get (t.substAt p h₁ u) (orthValidR h₁ h₂ orth) = q.get t h₂ := by
   grind [substAtgetOrth']
 
+lemma substOrth'
+  {p q : Position}
+  (t u₁ u₂ : Term)
+  (h₁ : p.valid t)
+  (h₂ : q.valid t)
+  (h₁' : p.valid (t.substAt q h₂ u₂))
+  (h₂' : q.valid (t.substAt p h₁ u₁))
+  (orth : p ⊥ q)
+  : (t.substAt p h₁ u₁).substAt q h₂' u₂ =
+    (t.substAt q h₂ u₂).substAt p h₁' u₁ := by
+  revert h₁ h₂ orth
+  match p, q, t with
+  | [], _, _ => grind
+  | _, [], _ => grind
+  | m::p', n::q', t₁ @@ t₂ =>
+    cases m <;> cases n <;> simp [valid, substAt] <;> intros
+    . apply substOrth'; trivial
+    . apply substOrth'; trivial
+  | _::_, _::_, var _ => grind
+  | _::_, _::_, func _ => grind
+
 lemma substOrth
   {p q : Position}
   (t u₁ u₂ : Term)
@@ -450,16 +471,7 @@ lemma substOrth
   (orth : p ⊥ q)
   : (t.substAt p h₁ u₁).substAt q (orthValidR h₁ h₂ orth) u₂ =
     (t.substAt q h₂ u₂).substAt p (orthValidL h₁ h₂ orth) u₁ := by
-  revert h₁ h₂ orth
-  match p, q, t with
-  | [], _, _ => grind
-  | _, [], _ => grind
-  | m::p', n::q', t₁ @@ t₂ =>
-    cases m <;> cases n <;> simp [valid, substAt] <;> intros
-    . apply substOrth; trivial
-    . apply substOrth; trivial
-  | _::_, _::_, var _ => grind
-  | _::_, _::_, func _ => grind
+  grind [substOrth']
 
 -- rewriting at orthogonal positions commutes
 -- FIXME: rename this
@@ -585,6 +597,14 @@ lemma nodupVarPos : (varPos t x).Nodup := by
          List.cons.injEq, reduceCtorEq, false_and, not_false_eq_true,
          implies_true] -- holy crap
 
+lemma substValidList {p : Position} {ps : List Position}
+  (h : p.valid t)
+  (h' : ∀ q ∈ ps, q.valid t)
+  (orth : ∀ q ∈ ps, p ≠ q → p ⊥ q)
+  (mem : q ∈ ps)
+  : q.valid (t.substAt p h u) := by
+  by_cases eq:(q = p); simp [eq]
+  grind [orthValidR]
 
 def Term.substAll (t u : Term) (ps : List Position)
   (h : ∀ p ∈ ps, p.valid t)
@@ -596,12 +616,7 @@ def Term.substAll (t u : Term) (ps : List Position)
     Term.substAll
       (t.substAt p (by grind) u)
       u ps'
-      (by
-        simp at h
-        have h' : ∀ p' ∈ ps', p ≠ p' → p ⊥ p' := by grind -- wow
-        intros p'
-        by_cases h'':(p' = p); simp [h'']
-        grind [orthValidL])
+      (by grind [substValidList])
       (by grind)
 
 -- Need some algebraic fact about `(t₁ @@ t₂).substAll u (varPos (t₁ @@ t₂) x)`.
@@ -664,7 +679,10 @@ lemma substAtIdem {t : Term}
   (h : p.valid t)
   (h' : p.valid (t.substAt p h u)) -- this can be proven
   : (t.substAt p h u).substAt p h' u = t.substAt p h u := by
-  sorry
+  match p, t with
+  | [], _ => simp [substAt]
+  | left::_, _@@_ => simp [substAt]; apply substAtIdem
+  | right::_, _@@_ => simp [substAt]; apply substAtIdem
 
 lemma rewriteAtIsRewrite {t : RTerm ℛ}
   {mem : ru ∈ ℛ}
@@ -686,9 +704,63 @@ lemma rewriteAtIsRewrite {t : RTerm ℛ}
     intro mtch; apply Reduces.congrRight
     apply rewriteAtIsRewrite <;> trivial
 
+@[simp]
+lemma substAtGet : substAt t p h (p.get t h) = t := by
+  revert h
+  match p, t with
+  | [], _ => simp [valid, substAt, Position.get]
+  | left::_ , _@@_ => simp [valid, substAt, Position.get]; apply substAtGet
+  | right::_ , _@@_ => simp [valid, substAt, Position.get]; apply substAtGet
+  | _::_, var _ => simp [valid]
+  | _::_, func _ => simp [valid]
 
-lemma foo {t : Term} (mem : p ∈ ps)
-  : t.substAll u (p::ps) _ _ = t.substAll u ps _ _ := by sorry
+-- A no-op substitution is a rewrite
+lemma rewriteAtIsRewrite' {t : RTerm ℛ}
+  {_ : ru ∈ ℛ}
+  (h : p.valid t)
+  (idem : p.get t h = ru.rhs.apply σ)
+  : t ~>* ru.rewriteAt t p σ h := by
+  have eq : t = ru.rewriteAt t p σ h := by
+    simp [Rule.rewriteAt, ← idem]
+  rw [← eq]
+  apply refl_trans_clos.refl
+
+lemma substAllIdem {t : Term}
+  (h₁ : ∀ p' ∈ ps, p'.valid t)
+  (h₂ : ∀ p' ∈ p::ps, p'.valid t)
+  (orth₁ : ∀ p' ∈ ps, ∀ p'' ∈ ps, p' ≠ p'' → p' ⊥ p'')
+  (orth₂ : ∀ p' ∈ p::ps, ∀ p'' ∈ p::ps, p' ≠ p'' → p' ⊥ p'')
+  (mem : p ∈ ps)
+  : t.substAll u (p::ps) h₂ orth₂ = t.substAll u ps h₁ orth₁ := by
+  induction ps
+  case _ => simp at mem
+  case _ hd tail ih =>
+    by_cases h:(p = hd)
+    . simp [h, substAll, substAtIdem]
+    . sorry
+
+lemma rewriteAtSubstAll {ℛ : Rules} {t : RTerm ℛ} {p : Position} {ru : Rule}
+  (mem : ru ∈ ℛ)
+  (mem' : p ∈ ps)
+  (h : p.valid t)
+  (isVar : p.get t h = var x)
+  (allValid : ∀ p ∈ ps, p.valid t)
+  (mtch : ∀ p' (mem : p' ∈ ps), ru.matchesAt t p' σ (allValid p' mem))
+  (allOrth : ∀ p ∈ ps, ∀ q ∈ ps, p ≠ q → (p ⊥ q))
+  : ru.rewriteAt t p σ h ~>*
+  t.substAll (ru.rhs.apply σ) ps allValid allOrth := by sorry
+
+-- Do I even need this one?
+lemma rewriteAtVarIsSubst_aux {ℛ : Rules} {t : RTerm ℛ} {p : Position} {ru : Rule}
+  (mem : ru ∈ ℛ)
+  (h : p.valid t)
+  (h' : p.valid (t.apply τ))
+  (isVar : p.get t h = var x)
+  (mtch : ru.matchesAt (t.apply τ) p σ h')
+  (allValid : ∀ p ∈ varPos t x, p.valid (t.apply τ))
+  (allOrth : ∀ p ∈ varPos t x, ∀ q ∈ varPos t x, p ≠ q → (p ⊥ q))
+  : ru.rewriteAt (t.apply τ) p σ (validSubst _ _ τ h) ~>*
+  (t.apply τ).substAll (ru.rhs.apply σ) (varPos t x) allValid allOrth := by sorry
 
 lemma rewriteAtVarIsSubst {ℛ : Rules} {t : RTerm ℛ} {p : Position} {ru : Rule}
   (mem : ru ∈ ℛ)
