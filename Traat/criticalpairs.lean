@@ -50,7 +50,7 @@ lemma funcValidHead (h : p.valid (func x)) : p = Position.head := by
   revert h; induction p <;> grind [Position.valid]
 
 
-lemma Position.validSubst (p : Position) (t : Term) (σ : Subst)
+lemma Position.validSubst {p : Position} {t : Term} (σ : Subst)
   (h : p.valid t)
   : p.valid <| t.apply σ := by
   match p, t with
@@ -864,7 +864,45 @@ lemma rewriteAtSubstAll {ℛ : Rules}
       . left; apply mtch; trivial
   . trivial
 
+#print Subst.join
+
+-- Ok this is slightly too weak
 #check substAllIsVarSubst
+
+#check isValidVarPos
+
+def Subst.replace (σ : Subst) (x : Var) (u : Term) : Subst :=
+  fun y => if y = x then u else σ y
+
+lemma substAllIsReplace (t u : Term) (x : Var) :
+  (t.apply τ).substAll u (varPos t x) (by grind [isValidVarPos, validSubst]) orthVarPos =
+  t.apply (τ.replace x u) := by
+  induction t
+  case _ y =>
+    simp [varPos, apply]
+    by_cases h:(y = x) <;> simp [h, substAll, substAt, Subst.replace]
+  case _ => simp [substAll, apply, varPos]
+  case _ ih₁ ih₂ =>
+    simp [varPos, apply]
+    rw [substAllAppDecomp] -- now we pay the piper for all those hyps
+    . congr
+    . intros; grind [isValidVarPos, validSubst]
+    . intros; grind [isValidVarPos, validSubst]
+    . apply orthVarPos
+    . apply orthVarPos
+
+#check rewriteAtSubstAll
+
+lemma getSubst {p : Position}
+  (h : p.valid t)
+  (h' : p.valid (t.apply σ))
+  : p.get (t.apply σ) h' = (p.get t h).apply σ := by
+  match p, t with
+  | [], _ => simp [Position.get]
+  | left::_, t₁ @@ _ => simp [apply, Position.get]; apply getSubst
+  | right::_, _ @@ t₂ => simp [apply, Position.get]; apply getSubst
+  | _::_, var _ => simp [valid] at h
+  | _::_, func _ => simp [valid] at h
 
 lemma rewriteAtVarIsSubst
   {ℛ : Rules}
@@ -874,6 +912,47 @@ lemma rewriteAtVarIsSubst
   (h' : p.get t h = var x)
   (mtch : τ x = u₁)
   (rew : u₁ ~> u₂)
-  : (t.apply τ).substAt p (validSubst _ _ τ h) u₂ ~>*
-    t.apply (varSubst x u₂ |>.join τ) := by
-  sorry
+  : (t.apply τ).substAt p (validSubst τ h) u₂ ~>*
+    t.apply (τ.replace x u₂) := by
+  simp [RTerm.apply]
+  rw [← substAllIsReplace t u₂ x (τ := τ)]
+  -- Notations smotations
+  have h₂ := rewriteAtSubstAll
+   (t := t.apply τ) (u₁ := u₁) (u₂ := u₂) (p := p) (ps := varPos t x)
+  simp at h₂
+  apply h₂
+  . apply varPosComplete <;> grind
+  . intros; rw [getSubst]
+    . rw [isVarVarPos']
+      . simp [apply]; trivial
+      . trivial
+    . grind
+  . trivial
+  . grind [isValidVarPos, validSubst]
+
+structure CriticalPair (ℛ : Rules) where
+  r₁ : Rule
+  r₂ : Rule
+  mem₁ : r₁ ∈ ℛ
+  mem₂ : r₂ ∈ ℛ
+  σ₁ : Subst
+  σ₂ : Subst
+  p : Position
+  valid_p : p.valid r₁.lhs
+  mtch₂ : r₂.matchesAt (r₁.lhs.apply σ₁) p τ (validSubst σ₁ valid_p)
+
+def CriticalPair.joins {ℛ : Rules} (cp : CriticalPair ℛ) : Prop :=
+  let lhs : RTerm ℛ := cp.r₁.rhs.apply cp.σ₁
+  let rhs : RTerm ℛ := cp.r₁.lhs.apply cp.σ₁
+                         |>.substAt cp.p
+                          (validSubst cp.σ₁ cp.valid_p)
+                          (cp.r₂.rhs.apply cp.σ₂)
+  lhs ~>*.*<~ rhs
+
+-- This is the main theorem: any failure to be locally confluent *must* come from
+-- a non-joinable critical pair.
+-- The converse is true as well, but we only state the "if" direction
+theorem criticalPairThm {ℛ : Rules}
+  (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
+  (t₁ t₂ : RTerm ℛ)
+  : weakly_confluent (termRed ℛ) := by sorry
