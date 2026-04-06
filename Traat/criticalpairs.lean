@@ -316,12 +316,22 @@ lemma isOrthoNil : ¬ ([] ⊥ p) := by
 lemma isOrthoNil' : ¬ (p ⊥ []) := by
   cases p <;> simp [Position.IsOrtho]
 
-lemma trichotomy {p q : Position} : p ⊆ q ∨ q ⊆ p ∨ p ⊥ q := by
+lemma trichotomy (p q : Position) : p ⊆ q ∨ q ⊆ p ∨ p ⊥ q := by
   cases p <;> cases q <;> try simp
   case cons.cons m _ n _ =>
     by_cases h:(m = n)
     . simp [h]; apply trichotomy
     . grind
+
+lemma commOrth {p q : Position} (h : p ⊥ q) : q ⊥ p := by
+  revert h
+  match p, q with
+  | [], _ => simp [Position.IsOrtho]
+  | _::_, [] => simp [Position.IsOrtho]
+  | left::_, left::_ => simp [Position.IsOrtho]; apply commOrth
+  | right::_, right::_ => simp [Position.IsOrtho]; apply commOrth
+  | left::_, right::_ => simp [Position.IsOrtho]
+  | right::_, left::_ => simp [Position.IsOrtho]
 
 end Position
 
@@ -354,13 +364,14 @@ def Rule.rewriteAt
 -- This is our master theorem to move between the "nice" definition of rewriting to the
 -- position based one, which will allow us to do horrible reasoning about critical pairs.
 theorem rewriteIsRewriteAt {ℛ : Rules} (t t' : RTerm ℛ) (red : t ~> t')
- : ∃ r ∈ ℛ, ∃ (p : Position) (σ : Subst) (h : p.valid t), t' = r.rewriteAt t p σ h := by
+ : ∃ r ∈ ℛ, ∃ (p : Position) (σ : Subst) (h : p.valid t),
+  r.matchesAt t p σ h ∧ t' = r.rewriteAt t p σ h := by
   simp [Red.reduces] at red
   induction red
   case _ l r σ mem =>
     exists ⟨l, r⟩; apply And.intro; trivial
     exists []; exists σ; exists rfl
-    simp [Rule.rewriteAt, Term.substAt]
+    simp [Rule.rewriteAt, Term.substAt, Rule.matchesAt, Position.get]
   case _ ih =>
     let ⟨r, ⟨mem, ⟨p, ⟨σ, ⟨h, eq⟩⟩⟩⟩⟩ := ih
     exists r; apply And.intro; trivial
@@ -949,10 +960,57 @@ def CriticalPair.joins {ℛ : Rules} (cp : CriticalPair ℛ) : Prop :=
                           (cp.r₂.rhs.apply cp.σ₂)
   lhs ~>*.*<~ rhs
 
+#check rewriteIsRewriteAt
+#check trichotomy
+
+#check orthCommutes
+#check rewriteAtIsRewrite
+#check substAtgetOrth'
+
+lemma joinableOrth (t : RTerm ℛ)
+  (ru₁ ru₂ : Rule)
+  (mem₁ : ru₁ ∈ ℛ)
+  (mem₂ : ru₂ ∈ ℛ)
+  (p₁ p₂ : Position)
+  (h₁ : p₁.valid t)
+  (h₂ : p₂.valid t)
+  (σ₁ σ₂ : Subst)
+  (mtch₁ : ru₁.matchesAt t p₁ σ₁ h₁)
+  (mtch₂ : ru₂.matchesAt t p₂ σ₂ h₂)
+  (orth : p₁ ⊥ p₂)
+   : ru₁.rewriteAt t p₁ σ₁ h₁ ~>*.*<~ ru₂.rewriteAt t p₂ σ₂ h₂ := by
+  exists ru₂.rewriteAt (ru₁.rewriteAt t p₁ σ₁ h₁) p₂ σ₂ (orthValidR h₁ h₂ orth)
+  apply And.intro
+  . apply refl_trans_clos.step _ _ _ _ (by apply refl_trans_clos.refl)
+    apply rewriteAtIsRewrite; trivial
+    simp [Rule.rewriteAt, Rule.matchesAt]
+    rw [substAtgetOrth']
+    . apply mtch₂
+    . trivial
+    . trivial
+  . apply refl_trans_clos.step _ _ _ _ (by apply refl_trans_clos.refl)
+    rw [orthCommutes] <;> try trivial
+    apply rewriteAtIsRewrite; trivial
+    simp [Rule.rewriteAt, Rule.matchesAt]
+    rw [substAtgetOrth']
+    . apply mtch₁
+    . trivial
+    . apply commOrth; trivial
+
+
+lemma joinableInc : False := by sorry
+
 -- This is the main theorem: any failure to be locally confluent *must* come from
 -- a non-joinable critical pair.
 -- The converse is true as well, but we only state the "if" direction
 theorem criticalPairThm {ℛ : Rules}
   (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
-  (t₁ t₂ : RTerm ℛ)
-  : weakly_confluent (termRed ℛ) := by sorry
+  : weakly_confluent (termRed ℛ) := by
+  simp [weakly_confluent]
+  intros t u₁ u₂ red₁ red₂
+  have ⟨ru₁, ⟨mem₁, ⟨p₁, ⟨σ₁,⟨h₁, ⟨mtch₁, rew₁⟩⟩⟩⟩⟩⟩ := rewriteIsRewriteAt _ _ red₁
+  have ⟨ru₂, ⟨mem₂, ⟨p₂, ⟨σ₂,⟨h₂, ⟨mtch₂, rew₂⟩⟩⟩⟩⟩⟩ := rewriteIsRewriteAt _ _ red₂
+  rcases trichotomy p₁ p₂ with h | h | h
+  . sorry
+  . sorry
+  . sorry
