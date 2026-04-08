@@ -150,6 +150,37 @@ def IsOuterPosition (p : Position) (t : Term) (σ : Subst) : Bool :=
   let ⟨p, _⟩ := p.splitOnSubst t σ
   if h : (p.valid t) then p.get t h |>.isVar else false
 
+lemma isOuterSplit (h : IsOuterPosition p t σ) :
+  ∃ (p₁ p₂ : Position) (x : Var) (h₁ : p₁.valid t),
+    p = p₁ ++ p₂ ∧ p₁.get t h₁ = var x := by
+  revert h t
+  induction p
+  case _ =>
+    simp [IsOuterPosition, Position.valid]
+    intros t; cases t <;> grind [isVar, Position.get]
+  case _ hd tail ih =>
+    intros t
+    cases t
+    case var y =>
+      intros _
+      exists [], (hd::tail), y, (Eq.refl true)
+    case func _ =>
+      simp [IsOuterPosition, Position.splitOnSubst, Position.valid, Position.get, isVar]
+    case app t₁ t₂ =>
+      cases hd
+      case _ =>
+        intros h
+        have h' : IsOuterPosition tail t₁ σ := by exact h
+        have ⟨p₁, ⟨p₂, ⟨y, ⟨h₁, _⟩⟩⟩⟩ := ih h'
+        exists (left::p₁), p₂, y, h₁
+        simp [Position.get]; grind
+      case _ =>
+        intros h
+        have h' : IsOuterPosition tail t₂ σ := by exact h
+        have ⟨p₁, ⟨p₂, ⟨y, ⟨h₁, _⟩⟩⟩⟩ := ih h'
+        exists (right::p₁), p₂, y, h₁
+        simp [Position.get]; grind
+
 -- define subst-at, rewrite-at, prove that you can always replace a rewrite with a rewrite at
 
 def Term.substAt (t : Term) (p : Position) (h : p.valid t) (u : Term) : Term :=
@@ -348,7 +379,7 @@ def Rule.matchesHead (r : Rule) (t : Term) (σ : Subst) : Prop :=
 
 -- Hey we don't even need the term here!
 @[simp]
-def Rule.rewriteHead (r : Rule) (σ : Subst) : Term := r.rhs.apply σ
+def Rule.rewriteHead (r : Rule) (σ : Subst) : RTerm ℛ := r.rhs.apply σ
 
 -- A little awkward to have to bundle the `p.valid t` proof here.
 def Rule.matchesAt (r : Rule) (t : Term) (p : Position) (σ : Subst) (h : p.valid t) : Prop :=
@@ -359,7 +390,7 @@ def Rule.rewriteAt
   (t : RTerm ℛ)
   (p : Position)
   (σ : Subst) (h : p.valid t) : RTerm ℛ :=
-  t.substAt p h (r.rewriteHead σ)
+  t.substAt p h (r.rewriteHead (ℛ:=ℛ) σ)
 
 -- This is our master theorem to move between the "nice" definition of rewriting to the
 -- position based one, which will allow us to do horrible reasoning about critical pairs.
@@ -492,7 +523,7 @@ lemma substOrth
 
 -- rewriting at orthogonal positions commutes
 -- FIXME: rename this
-lemma orthCommutes
+lemma rewriteAtOrthCom
   {ru₁ ru₂ : Rule}
   {p q : Position}
   (t : RTerm ℛ)
@@ -950,7 +981,8 @@ structure CriticalPair (ℛ : Rules) where
   σ₂ : Subst
   p : Position
   valid_p : p.valid r₁.lhs
-  mtch₂ : r₂.matchesAt (r₁.lhs.apply σ₁) p τ (validSubst σ₁ valid_p)
+  nvar_p : ¬ (p.get r₁.lhs valid_p |>.isVar)
+  mtch₂ : r₂.matchesAt (r₁.lhs.apply σ₁) p σ₂ (validSubst σ₁ valid_p)
 
 def CriticalPair.joins {ℛ : Rules} (cp : CriticalPair ℛ) : Prop :=
   let lhs : RTerm ℛ := cp.r₁.rhs.apply cp.σ₁
@@ -963,7 +995,7 @@ def CriticalPair.joins {ℛ : Rules} (cp : CriticalPair ℛ) : Prop :=
 #check rewriteIsRewriteAt
 #check trichotomy
 
-#check orthCommutes
+#check rewriteAtOrthCom
 #check rewriteAtIsRewrite
 #check substAtgetOrth'
 
@@ -989,7 +1021,7 @@ lemma joinableOrth (t : RTerm ℛ)
     . trivial
     . trivial
   . apply refl_trans_clos.step _ _ _ _ (by apply refl_trans_clos.refl)
-    rw [orthCommutes] <;> try trivial
+    rw [rewriteAtOrthCom] <;> try trivial
     apply rewriteAtIsRewrite; trivial
     simp [Rule.rewriteAt, Rule.matchesAt]
     rw [substAtgetOrth']
@@ -997,8 +1029,105 @@ lemma joinableOrth (t : RTerm ℛ)
     . trivial
     . apply commOrth; trivial
 
+#print CriticalPair
 
-lemma joinableInc : False := by sorry
+lemma matchesAtHeadIsInst {t : Term} {ru : Rule}
+  (h : ru.matchesAt t [] σ (Eq.refl true))
+  : t = ru.lhs.apply σ := by
+  revert h
+  simp [Rule.matchesAt, Position.get]
+  grind
+
+#check isOuterSplit
+#check rewriteAtVarIsSubst
+#check splitOnSubstConcat
+#print substAt
+
+lemma validConcat {p₁ p₂ : Position}
+  (h : (p₁ ++ p₂).valid t)
+  : p₁.valid t := by
+  revert h
+  match p₁, t with
+  | [], _ => simp [valid]
+  | left::_, _ @@ _ => simp [valid]; apply validConcat
+  | right::_, _ @@ _ => simp [valid]; apply validConcat
+  | _::_, var _ => simp [valid]
+  | _::_, func _ => simp [valid]
+
+lemma validConcatGet {p₁ p₂ : Position}
+  (h₁ : (p₁ ++ p₂).valid t)
+  (h₂ : p₁.valid t)
+  : p₂.valid (p₁.get t h₂) := by
+  revert h₁ h₂
+  match p₁, t with
+  | [], _ => simp [valid, Position.get]
+  | left::_, _ @@ _ => simp [valid]; apply validConcatGet
+  | right::_, _ @@ _ => simp [valid]; apply validConcatGet
+  | _::_, var _ => simp [valid]
+  | _::_, func _ => simp [valid]
+
+lemma substConcat {p₁ p₂ : Position}
+  (h₁ : p₁.valid t)
+  (h₂ : p₂.valid (p₁.get t h₁))
+  (h₃ : (p₁ ++ p₂).valid t)
+  : substAt t (p₁ ++ p₂) h₃ u = substAt t p₁ h₁ (substAt (p₁.get t h₁) p₂ h₂ u) := by
+  revert h₁
+  match p₁, t with
+  | [], _ => simp [Position.get, substAt]
+  | left::_, _ @@ _ => simp [substAt, Position.get]; intros; apply substConcat
+  | right::_, _ @@ _ => simp [substAt, Position.get]; intros; apply substConcat
+  | _::_, var _ => simp [valid]
+  | _::_, func _ => simp [valid]
+
+lemma matchesConcat {p₁ p₂ : Position} {ru : Rule}
+  (h₁ : p₁.valid t)
+  (h₂ : p₂.valid (p₁.get t h₁))
+  (h₃ : (p₁ ++ p₂).valid t)
+  (mtchConcat : ru.matchesAt t (p₁ ++ p₂) σ h₃)
+  : ru.matchesAt (p₁.get t h₁) p₂ σ h₂ := by
+  revert mtchConcat
+  simp [Rule.matchesAt]
+
+lemma joinableTop (t : RTerm ℛ)
+  (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
+  (ru₁ ru₂ : Rule)
+  (mem₁ : ru₁ ∈ ℛ)
+  (mem₂ : ru₂ ∈ ℛ)
+  (p₂ : Position)
+  (h₂ : p₂.valid t)
+  (σ₁ σ₂ : Subst)
+  (mtch₁ : ru₁.matchesAt t [] σ₁ (Eq.refl true))
+  (mtch₂ : ru₂.matchesAt t p₂ σ₂ h₂)
+   : ru₁.rewriteHead σ₁ ~>*.*<~ ru₂.rewriteAt t p₂ σ₂ h₂ := by
+  by_cases isOuter:(IsOuterPosition p₂ ru₁.lhs σ₁)
+  -- This case is awkward: though we're rewriting *at* `p₂` (with `rewriteAt`)
+  -- we want to consider a rewrite at a higher position, that of a variable
+  -- in `ru₁.lhs`, so we can apply `rewriteAtVarIsSubst`.
+  -- This is not a head rewrite though.
+  . have ⟨p₁, ⟨p₂', ⟨x, ⟨h, ⟨h', h''⟩⟩⟩⟩⟩ := isOuterSplit isOuter
+    revert mtch₂ isOuter h₂; rw [h']; intros h₂ mtch₂ isOuter
+    simp [Rule.rewriteAt]
+    have h₁₁ : p₁.valid t := by apply validConcat; trivial
+    have h₁₂ : p₂'.valid (p₁.get t h₁₁) := by apply validConcatGet; trivial
+    rw [substConcat (t:=t) (h₁ := h₁₁) (h₂ := h₁₂)]
+    let u := (p₁.get t h₁₁).substAt p₂' h₁₂ (ru₂.rhs.apply σ₂)
+    exists (ru₁.rhs.apply (σ₁.replace x u))
+    sorry
+  . sorry
+
+lemma joinableInc (t : RTerm ℛ)
+  (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
+  (ru₁ ru₂ : Rule)
+  (mem₁ : ru₁ ∈ ℛ)
+  (mem₂ : ru₂ ∈ ℛ)
+  (p₁ p₂ : Position)
+  (h₁ : p₁.valid t)
+  (h₂ : p₂.valid t)
+  (σ₁ σ₂ : Subst)
+  (mtch₁ : ru₁.matchesAt t p₁ σ₁ h₁)
+  (mtch₂ : ru₂.matchesAt t p₂ σ₂ h₂)
+   : ru₁.rewriteAt t p₁ σ₁ h₁ ~>*.*<~ ru₂.rewriteAt t p₂ σ₂ h₂ := by
+  sorry
 
 -- This is the main theorem: any failure to be locally confluent *must* come from
 -- a non-joinable critical pair.
@@ -1011,6 +1140,6 @@ theorem criticalPairThm {ℛ : Rules}
   have ⟨ru₁, ⟨mem₁, ⟨p₁, ⟨σ₁,⟨h₁, ⟨mtch₁, rew₁⟩⟩⟩⟩⟩⟩ := rewriteIsRewriteAt _ _ red₁
   have ⟨ru₂, ⟨mem₂, ⟨p₂, ⟨σ₂,⟨h₂, ⟨mtch₂, rew₂⟩⟩⟩⟩⟩⟩ := rewriteIsRewriteAt _ _ red₂
   rcases trichotomy p₁ p₂ with h | h | h
-  . sorry
-  . sorry
-  . sorry
+  . rw [rew₁, rew₂]; apply joinableInc <;> grind
+  . rw [rew₁, rew₂]; apply joinableInc <;> grind
+  . rw [rew₁, rew₂]; apply joinableOrth <;> grind
