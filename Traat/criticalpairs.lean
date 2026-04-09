@@ -1088,6 +1088,8 @@ lemma matchesConcat {p₁ p₂ : Position} {ru : Rule}
   revert mtchConcat
   simp [Rule.matchesAt]
 
+#check rewriteAtIsRewrite
+
 lemma joinableTop (t : RTerm ℛ)
   (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
   (ru₁ ru₂ : Rule)
@@ -1110,9 +1112,27 @@ lemma joinableTop (t : RTerm ℛ)
     have h₁₁ : p₁.valid t := by apply validConcat; trivial
     have h₁₂ : p₂'.valid (p₁.get t h₁₁) := by apply validConcatGet; trivial
     rw [substConcat (t:=t) (h₁ := h₁₁) (h₂ := h₁₂)]
-    let u := (p₁.get t h₁₁).substAt p₂' h₁₂ (ru₂.rhs.apply σ₂)
+    let u : RTerm ℛ := (p₁.get t h₁₁).substAt p₂' h₁₂ (ru₂.rhs.apply σ₂)
+    let u_l : RTerm ℛ := σ₁ x
+    have h₅ : σ₁ x = p₁.get t h₁₁ := by
+      calc
+        σ₁ x = (var x).apply σ₁ := by simp [apply]
+        _    = (p₁.get ru₁.lhs h).apply σ₁ := by rw [← h'']
+        _    = (p₁.get (ru₁.lhs.apply σ₁) (validSubst σ₁ h)) := by rw [getSubst]
+        _    = (p₁.get t h₁₁) := by congr
+    have u_rew : u_l ~> u := by -- This is the most finicky proof I have ever done
+      simp [Rule.matchesAt] at mtch₂
+      have h₃ : p₂'.valid u_l := by
+        simp [Rule.matchesAt, Position.get] at mtch₁
+        simp [u_l]
+        have h₄ := validAppendTail h₂
+        rw [h₅]; trivial
+      simp [u_l, u]; rw [h₅]
+      apply rewriteAtIsRewrite <;> trivial
     exists (ru₁.rhs.apply (σ₁.replace x u))
-    sorry
+    apply And.intro
+    . sorry
+    . sorry
   . sorry
 
 lemma joinableInc (t : RTerm ℛ)
