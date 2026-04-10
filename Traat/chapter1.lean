@@ -127,6 +127,11 @@ lemma trans_clos_transitive' (R : A → A → Prop) (x y z : A)
   revert h₂ z
   induction h₁ <;> grind
 
+lemma refl_trans_clos_base [R : Red A] (x y : A)
+  (h : x ~> y) : x ~>* y := by
+  apply refl_trans_clos.step _ _ _ _ (by apply refl_trans_clos.refl)
+  trivial
+
 @[grind →]
 lemma refl_trans_clos_transitive [R : Red A] (x y z : A)
   (h₁ : x ~>* y) (h₂ : y ~>* z) : x ~>* z := by

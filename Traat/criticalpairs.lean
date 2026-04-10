@@ -1089,6 +1089,72 @@ lemma matchesConcat {p₁ p₂ : Position} {ru : Rule}
   simp [Rule.matchesAt]
 
 #check rewriteAtIsRewrite
+#check rewriteAtVarIsSubst
+
+lemma rewriteReplace {t : RTerm ℛ}
+  (rewAt : let u' : RTerm ℛ := σ x; u' ~> u)
+  : t.apply σ ~>* t.apply (σ.replace x u) := by
+  induction t
+  case _ y =>
+    by_cases h:(y = x)
+    . simp [h, RTerm.apply, apply, Subst.replace]
+      apply refl_trans_clos.step _ _ _ _ (by apply refl_trans_clos.refl)
+      trivial
+    . simp [RTerm.apply, apply, Subst.replace]
+      simp [h]
+      apply refl_trans_clos.refl
+  case _ => simp [apply]; apply refl_trans_clos.refl
+  case _ =>
+    simp [apply]
+    apply Reduces.congReflTrans <;> trivial
+
+lemma IsNotOuterValid {p : Position}
+  (h : p.valid <| t.apply σ)
+  (isNOuter : ¬ IsOuterPosition p t σ)
+  : p.valid t  := by
+  revert h isNOuter
+  match p, t with
+  | [], _ => simp [valid]
+  | left::_, _ @@ _ =>
+    simp [valid, apply, IsOuterPosition, splitOnSubst, Position.get]
+    intros; apply IsNotOuterValid
+    . trivial
+    . simp [IsOuterPosition]; grind
+  | right::_, _ @@ _ =>
+    simp [valid, apply, IsOuterPosition, splitOnSubst, Position.get]
+    intros; apply IsNotOuterValid
+    . trivial
+    . simp [IsOuterPosition]; grind
+  | _::_, var _ =>
+    simp [IsOuterPosition, splitOnSubst, Position.get, valid, Term.isVar]
+  | _::_, func _ =>
+    simp [valid, apply]
+
+-- FIXME: this is a dumb proof, could just induct on `t`.
+lemma IsNotOuterNvar_aux
+  (h : p.valid t)
+  (isNOuter : ¬ IsOuterPosition p t σ)
+  : (p.get t h |>.isVar) = false := by
+  revert h isNOuter
+  match p, t with
+  | [], _ => simp [valid, IsOuterPosition]
+  | left::_, _ @@ _ =>
+    simp [valid, IsOuterPosition, splitOnSubst, Position.get]
+    intros; apply IsNotOuterNvar_aux
+    . simp [IsOuterPosition]; trivial
+  | right::_, _ @@ _ =>
+    simp [valid, IsOuterPosition, splitOnSubst, Position.get]
+    intros; apply IsNotOuterNvar_aux
+    . simp [IsOuterPosition]; trivial
+  | _::_, var _ =>
+    simp [valid]
+  | _::_, func _ =>
+    simp [valid]
+
+lemma IsNotOuterNvar
+  (h : p.valid t)
+  (isNOuter : ¬ IsOuterPosition p t σ)
+  : ¬ (p.get t h |>.isVar) := by simp; apply IsNotOuterNvar_aux <;> trivial
 
 lemma joinableTop (t : RTerm ℛ)
   (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
@@ -1131,9 +1197,49 @@ lemma joinableTop (t : RTerm ℛ)
       apply rewriteAtIsRewrite <;> trivial
     exists (ru₁.rhs.apply (σ₁.replace x u))
     apply And.intro
-    . sorry
-    . sorry
-  . sorry
+    . apply rewriteReplace; trivial
+    . have h₆ :
+       substAt t p₁ h₁₁ ((p₁.get t h₁₁).substAt p₂' h₁₂ (ru₂.rhs.apply σ₂)) =
+       substAt t p₁ h₁₁ u := by trivial
+      rw [h₆]
+      -- Very annoying
+      let u' : RTerm ℛ := ru₁.lhs.apply (σ₁.replace x u)
+      apply refl_trans_clos_transitive (y := u')
+      simp [Rule.matchesAt, Position.get] at mtch₁
+      simp [← mtch₁]; simp [u']
+      . apply rewriteAtVarIsSubst <;> trivial
+      . simp [u']
+        apply refl_trans_clos.step _ _ _ _ (by apply refl_trans_clos.refl)
+        simp [Red.reduces]; apply Reduces.head
+        trivial
+  . simp [CriticalPair.joins] at joinable
+    let cp : CriticalPair ℛ := by
+      apply CriticalPair.mk ru₁ ru₂ mem₁ mem₂ σ₁ σ₂ p₂
+      . apply IsNotOuterNvar; trivial
+      . simp [Rule.matchesAt, Position.get] at mtch₁
+        simp [mtch₁]
+        trivial
+      . simp [Rule.matchesAt, Position.get] at mtch₁
+        rw [← mtch₁] at h₂
+        apply IsNotOuterValid <;> trivial
+    have joins := joinable cp
+    simp [cp] at joins
+    simp [Rule.rewriteHead, Rule.rewriteAt]
+    simp [Rule.matchesAt, Position.get] at mtch₁
+    simp [← mtch₁]
+    apply joins
+
+lemma congrJoinL {t₁ t₂ u : RTerm ℛ}
+  (joins : t₁ ~>*.*<~ t₂)
+  : (t₁ @@@ u) ~>*.*<~ (t₂ @@@ u) := by
+  have ⟨t', _⟩ := joins
+  exists (t' @@@ u); grind [Reduces.congReflTransL]
+
+lemma congrJoinR {t u₁ u₂ : RTerm ℛ}
+  (joins : u₁ ~>*.*<~ u₂)
+  : (t @@@ u₁) ~>*.*<~ (t @@@ u₂) := by
+  have ⟨u', _⟩ := joins
+  exists (t @@@ u'); grind [Reduces.congReflTransR]
 
 lemma joinableInc (t : RTerm ℛ)
   (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
@@ -1146,8 +1252,33 @@ lemma joinableInc (t : RTerm ℛ)
   (σ₁ σ₂ : Subst)
   (mtch₁ : ru₁.matchesAt t p₁ σ₁ h₁)
   (mtch₂ : ru₂.matchesAt t p₂ σ₂ h₂)
+  (inc : p₁ ⊆ p₂)
    : ru₁.rewriteAt t p₁ σ₁ h₁ ~>*.*<~ ru₂.rewriteAt t p₂ σ₂ h₂ := by
-  sorry
+  match p₁, p₂ with
+  | [], _ =>
+    have h := joinableTop (ru₁:=ru₁) (ru₂:=ru₂) (t:=t)
+    simp [Rule.rewriteHead] at h
+    simp [Rule.rewriteAt, substAt]
+    apply h <;> trivial
+  | left::p₁', left::p₂' =>
+    cases t
+    case _ => simp [valid] at h₁
+    case _ => simp [valid] at h₁
+    case _ =>
+      simp [Rule.rewriteAt, substAt]
+      apply congrJoinL
+      apply joinableInc <;> trivial
+  | right::p₁', right::p₂' =>
+    cases t
+    case _ => simp [valid] at h₁
+    case _ => simp [valid] at h₁
+    case _ =>
+      simp [Rule.rewriteAt, substAt]
+      apply congrJoinR
+      apply joinableInc <;> trivial
+  | left::p₁', right::p₂' => simp [Subset, Inc] at inc
+  | right::p₁', left::p₂' => simp [Subset, Inc] at inc
+
 
 -- This is the main theorem: any failure to be locally confluent *must* come from
 -- a non-joinable critical pair.
@@ -1161,5 +1292,5 @@ theorem criticalPairThm {ℛ : Rules}
   have ⟨ru₂, ⟨mem₂, ⟨p₂, ⟨σ₂,⟨h₂, ⟨mtch₂, rew₂⟩⟩⟩⟩⟩⟩ := rewriteIsRewriteAt _ _ red₂
   rcases trichotomy p₁ p₂ with h | h | h
   . rw [rew₁, rew₂]; apply joinableInc <;> grind
-  . rw [rew₁, rew₂]; apply joinableInc <;> grind
+  . rw [rew₁, rew₂]; apply swap_joins; apply joinableInc <;> grind
   . rw [rew₁, rew₂]; apply joinableOrth <;> grind

@@ -408,6 +408,34 @@ def RTerm.app {ℛ} (t₁ t₂ : RTerm ℛ) : RTerm ℛ := t₁ @@ t₂
 infix:30 " @@@ " => RTerm.app
 
 -- TODO: do the `~>*` versions also
+lemma Reduces.congReflTransL {ℛ : Rules}
+ (t₁ t₂ u : RTerm ℛ)
+ (red : t₁ ~>* t₂)
+ : (t₁ @@@ u) ~>* (t₂ @@@ u) := by
+  induction red
+  case _ => constructor
+  case _ =>
+    apply refl_trans_clos.step; constructor; trivial
+    trivial
+
+lemma Reduces.congReflTransR {ℛ : Rules}
+ (t u₁ u₂ : RTerm ℛ)
+ (red : u₁ ~>* u₂)
+ : (t @@@ u₁) ~>* (t @@@ u₂) := by
+  induction red
+  case _ => constructor
+  case _ =>
+    apply refl_trans_clos.step; apply Reduces.congrRight <;> trivial
+    trivial
+
+lemma Reduces.congReflTrans {ℛ : Rules}
+ (t₁ t₂ u₁ u₂ : RTerm ℛ)
+ (red₁ : t₁ ~>* t₂)
+ (red₂ : u₁ ~>* u₂)
+ : (t₁ @@@ u₁) ~>* (t₂ @@@ u₂) := by
+  apply refl_trans_clos_transitive (y := t₂ @@@ u₁)
+  . apply Reduces.congReflTransL; grind
+  . apply Reduces.congReflTransR; grind
 
 lemma Reduces.congReflSymTransL {ℛ : Rules}
  (t₁ t₂ u : RTerm ℛ)
