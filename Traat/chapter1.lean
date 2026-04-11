@@ -658,11 +658,13 @@ section Commuting
 class Red₁ (A : Type) where
   reduces (x y : A) : Prop
 
+@[reducible]
 def Red₁.toRed (R : Red₁ A) : Red A := ⟨R.reduces⟩
 
 class Red₂ (A : Type) where
   reduces (x y : A) : Prop
 
+@[reducible]
 def Red₂.toRed (R : Red₂ A) : Red A := ⟨R.reduces⟩
 
 infixl:50 " ~>₁ " => Red₁.reduces
@@ -731,7 +733,7 @@ lemma contains_and_contained_trans_implies_diamond_conf
     intros diamond'
     have h' := diamond_implies_confluent diamond'
     have : confluent R'.toRed = confluent R.toRed := by
-      simp [Red₁.toRed, Red₂.toRed, confluent, wedge, joins]
+      simp [confluent, wedge, joins, Red.reduces]
       rw [h]
     grind
 
@@ -770,7 +772,7 @@ theorem commuting_preserves_confluent [R : Red₁ A] [R' : Red₂ A]
         simp [union]; grind
       . trivial
     grind
-  . intros x y z; simp [Red₂.toRed, R₂]
+  . intros x y z
     intros h₁ h₂
     have ⟨y', h₁₁, h₁₂⟩ := h₁
     have ⟨z', h₂₁, h₂₂⟩ := h₂

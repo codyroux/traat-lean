@@ -277,6 +277,7 @@ instance SetoidCtx (Γ : Ctxt) : Setoid Term where
   r := CtxtRel Γ
   iseqv := EqCtxRel Γ
 
+@[reducible]
 def TermModel (Γ : Ctxt) := Quotient <| SetoidCtx Γ
 
 #check Quotient.map₂'
@@ -307,12 +308,14 @@ lemma subst_lift (Γ : Ctxt) (t : Term) (θ : Valuation (TermModel Γ)) :
   simp; rw [subst_term_model]; congr
   funext; simp
 
+#print TermModel
+
 theorem completeness (Γ : Ctxt) (E : FormalEq) : Γ ⊧ E → Γ ⊢ E := by
   intros models
   have h : (∀ E ∈ Γ, ∀ (θ : Valuation (TermModel Γ)), ⦃E.lhs⦄ θ = ⦃E.rhs⦄ θ) := by
     intros E mem θ
     rw [← subst_lift]; rw [← subst_lift, Quotient.eq_iff_equiv]
-    simp [HasEquiv.Equiv, SetoidCtx, CtxtRel]
+    simp [HasEquiv.Equiv]
     apply Derives.subst; apply Derives.ax; exact mem
   have models := models (TermModel Γ) h (fun x => ⟦var x⟧); simp at models
   rw [← subst_term_model] at models

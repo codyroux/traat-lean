@@ -299,15 +299,15 @@ instance Position.instSDiff : SDiff Position where
 
 @[simp]
 lemma sdiffHead₁ {p : Position} : p \ [] = p := by
-  induction p <;> simp [Position.instSDiff, Position.sdiff]
+  induction p <;> simp [sdiff, Position.sdiff]
 
 @[simp]
 lemma sdiffHead₂ {p : Position} : [] \ p = [] := by
-  induction p <;> simp [Position.instSDiff, Position.sdiff]
+  induction p <;> simp [sdiff, Position.sdiff]
 
 @[simp]
 lemma sdiffCons {p q : Position} {m : Move} : (m::p) \ (m::q) = p \ q := by
-  cases m <;> simp [Position.instSDiff, Position.sdiff]
+  cases m <;> simp [sdiff, Position.sdiff]
 
 @[simp]
 lemma sdiffEmpty {p : Position} : (p \ p) = [] := by
@@ -615,6 +615,7 @@ lemma orthLeaf
   | [], [], _ => grind
   | _::_, [], t₁ @@ t₂ => simp [isVar, Position.get] at isVar₂
   | [], _::_, t₁ @@ t₂ => simp [isVar, Position.get] at isVar₁
+  | [], _ :: _, var _ => simp [valid] at h₂
 
 lemma orthVarPos : ∀ p ∈ varPos t x, ∀ q ∈ varPos t x, p ≠ q → p ⊥ q := by
   intros p mem₁ q mem₂ neq; apply orthLeaf <;> try trivial
