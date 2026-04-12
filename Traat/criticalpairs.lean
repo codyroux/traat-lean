@@ -973,7 +973,7 @@ lemma rewriteAtVarIsSubst
   . trivial
   . grind [isValidVarPos, validSubst]
 
-structure CriticalPair (ℛ : Rules) where
+structure PreCriticalPair (ℛ : Rules) where
   r₁ : Rule
   r₂ : Rule
   mem₁ : r₁ ∈ ℛ
@@ -985,7 +985,7 @@ structure CriticalPair (ℛ : Rules) where
   nvar_p : ¬ (p.get r₁.lhs valid_p |>.isVar)
   mtch₂ : r₂.matchesAt (r₁.lhs.apply σ₁) p σ₂ (validSubst σ₁ valid_p)
 
-def CriticalPair.joins {ℛ : Rules} (cp : CriticalPair ℛ) : Prop :=
+def PreCriticalPair.joins {ℛ : Rules} (cp : PreCriticalPair ℛ) : Prop :=
   let lhs : RTerm ℛ := cp.r₁.rhs.apply cp.σ₁
   let rhs : RTerm ℛ := cp.r₁.lhs.apply cp.σ₁
                          |>.substAt cp.p
@@ -1030,7 +1030,7 @@ lemma joinableOrth (t : RTerm ℛ)
     . trivial
     . apply commOrth; trivial
 
-#print CriticalPair
+#print PreCriticalPair
 
 lemma matchesAtHeadIsInst {t : Term} {ru : Rule}
   (h : ru.matchesAt t [] σ (Eq.refl true))
@@ -1158,7 +1158,7 @@ lemma IsNotOuterNvar
   : ¬ (p.get t h |>.isVar) := by simp; apply IsNotOuterNvar_aux <;> trivial
 
 lemma joinableTop (t : RTerm ℛ)
-  (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
+  (joinable : ∀ cp : PreCriticalPair ℛ, cp.joins)
   (ru₁ ru₂ : Rule)
   (mem₁ : ru₁ ∈ ℛ)
   (mem₂ : ru₂ ∈ ℛ)
@@ -1213,9 +1213,9 @@ lemma joinableTop (t : RTerm ℛ)
         apply refl_trans_clos.step _ _ _ _ (by apply refl_trans_clos.refl)
         simp [Red.reduces]; apply Reduces.head
         trivial
-  . simp [CriticalPair.joins] at joinable
-    let cp : CriticalPair ℛ := by
-      apply CriticalPair.mk ru₁ ru₂ mem₁ mem₂ σ₁ σ₂ p₂
+  . simp [PreCriticalPair.joins] at joinable
+    let cp : PreCriticalPair ℛ := by
+      apply PreCriticalPair.mk ru₁ ru₂ mem₁ mem₂ σ₁ σ₂ p₂
       . apply IsNotOuterNvar; trivial
       . simp [Rule.matchesAt, Position.get] at mtch₁
         simp [mtch₁]
@@ -1243,7 +1243,7 @@ lemma congrJoinR {t u₁ u₂ : RTerm ℛ}
   exists (t @@@ u'); grind [Reduces.congReflTransR]
 
 lemma joinableInc (t : RTerm ℛ)
-  (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
+  (joinable : ∀ cp : PreCriticalPair ℛ, cp.joins)
   (ru₁ ru₂ : Rule)
   (mem₁ : ru₁ ∈ ℛ)
   (mem₂ : ru₂ ∈ ℛ)
@@ -1285,7 +1285,7 @@ lemma joinableInc (t : RTerm ℛ)
 -- a non-joinable critical pair.
 -- The converse is true as well, but we only state the "if" direction
 theorem criticalPairThm {ℛ : Rules}
-  (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
+  (joinable : ∀ cp : PreCriticalPair ℛ, cp.joins)
   : weakly_confluent (termRed ℛ) := by
   simp [weakly_confluent]
   intros t u₁ u₂ red₁ red₂
@@ -1295,3 +1295,81 @@ theorem criticalPairThm {ℛ : Rules}
   . rw [rew₁, rew₂]; apply joinableInc <;> grind
   . rw [rew₁, rew₂]; apply swap_joins; apply joinableInc <;> grind
   . rw [rew₁, rew₂]; apply joinableOrth <;> grind
+
+-- Magic
+def freshVar (base : Var) (avoid : Finset Var) : Var :=
+  sorry
+
+-- Jeesh
+def freshVarInv (renamed : Var) (avoid : Finset Var) : Var := sorry
+
+lemma freshVarNotIn
+  : freshVar x S ∉ S := by sorry
+
+lemma freshVarInvInv :
+  freshVarInv (freshVar x S) S = x := by sorry
+
+lemma freshVarDistinct
+  (neq : x ≠ y)
+  : freshVar x S ≠ freshVar y S := by
+  intro h
+  have h' : freshVarInv (freshVar x S) S = freshVarInv (freshVar y S) S := by grind
+  grind [freshVarInvInv]
+
+def Subst.rename (avoid : Finset Var) : Subst := fun x => var <| freshVar x avoid
+
+#print Subst.scomp
+#check Subst.scompApply
+
+def Subst.joinAvoiding (σ₁ : Subst) (σ₂ : Subst) (S : Finset Var) : Subst :=
+  fun x => if x ∈ S then σ₂ x else σ₁ (freshVarInv x S)
+
+lemma joinAvoidingApply₁ (σ₁ : Subst) (σ₂ : Subst)
+  : (Subst.rename S).scomp (σ₁.joinAvoiding σ₂ S) = σ₁ := by
+  funext x; simp [Subst.scomp, Subst.rename, apply, Subst.joinAvoiding]
+  simp [freshVarNotIn, freshVarInvInv]
+
+lemma joinAvoidingApply₂ {t : Term} {σ₁ σ₂ : Subst}
+  {S : Finset Var}
+  (h : t.vars ⊆ S)
+  : t.apply (σ₁.joinAvoiding σ₂ S) = t.apply σ₂ := by
+  revert h
+  induction t
+  case var x => simp [vars, apply, Subst.joinAvoiding]; grind
+  case func _ => simp [apply]
+  case app h₁ h₂ => simp [apply, vars]; grind
+
+-- FIXME: is this the right lemma?
+lemma matchMGUAvoid {t₁ t₂ : Term}
+  (h₁ : t₁.apply σ₁ = t')
+  (h₂ : t₂.apply σ₂ = t')
+  : Unify (t₁.apply <| Subst.rename t₂.vars) t₂ := by
+  simp [Unify, Unifier]
+  exists σ₁.joinAvoiding σ₂ t₂.vars
+  rw [← Subst.scompApply]
+  simp [joinAvoidingApply₁, joinAvoidingApply₂]; grind
+
+#print PreCriticalPair.joins
+
+structure CriticalPair (ℛ : Rules) where
+  ru₁ : Rule
+  ru₂ : Rule
+  mem₁ : ru₁ ∈ ℛ
+  mem₂ : ru₂ ∈ ℛ
+  p : Position
+  valid_p : p.valid ru₁.lhs
+  unifies : unify
+   (p.get ru₁.lhs valid_p |>.apply (Subst.rename ru₂.lhs.vars))
+   ru₂.lhs
+   |>.isSome
+
+def CriticalPair.joins (cp : CriticalPair ℛ) : Prop :=
+  let renTerm := cp.p.get cp.ru₁.lhs cp.valid_p
+                 |>.apply (Subst.rename cp.ru₂.lhs.vars)
+  let mgu := unify renTerm cp.ru₂.lhs |>.get cp.unifies
+  let lhs : RTerm ℛ := cp.ru₁.rhs.apply mgu
+  let rhs : RTerm ℛ := (cp.ru₁.lhs.apply mgu).substAt cp.p (validSubst mgu cp.valid_p)
+                        (cp.ru₂.rhs.apply mgu)
+  lhs ~>*.*<~ rhs
+
+def criticalOfPreCritical (cp : PreCriticalPair ℛ) : CriticalPair ℛ := sorry

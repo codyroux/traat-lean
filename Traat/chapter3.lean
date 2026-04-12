@@ -6,7 +6,7 @@ open Term Subst
 
 def Unifier (σ : Subst) (t u : Term) : Prop := t.apply σ = u.apply σ
 
-def Unifies (t u : Term) : Prop := ∃ σ, Unifier σ t u
+def Unify (t u : Term) : Prop := ∃ σ, Unifier σ t u
 
 def varSubst (x : Var) (t : Term) : Subst := fun y => if y = x then t else var y
 
