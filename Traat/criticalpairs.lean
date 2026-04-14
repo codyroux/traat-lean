@@ -1281,10 +1281,10 @@ lemma joinableInc (t : RTerm ℛ)
   | right::p₁', left::p₂' => simp [Subset, Inc] at inc
 
 
--- This is the main theorem: any failure to be locally confluent *must* come from
--- a non-joinable critical pair.
+-- This is almost the main theorem: any failure to be locally confluent *must* come from
+-- a non-joinable pre-critical pair.
 -- The converse is true as well, but we only state the "if" direction
-theorem criticalPairThm {ℛ : Rules}
+theorem PreCritJoinableWC {ℛ : Rules}
   (joinable : ∀ cp : PreCriticalPair ℛ, cp.joins)
   : weakly_confluent (termRed ℛ) := by
   simp [weakly_confluent]
@@ -1316,7 +1316,7 @@ lemma freshVarDistinct
   have h' : freshVarInv (freshVar x S) S = freshVarInv (freshVar y S) S := by grind
   grind [freshVarInvInv]
 
-def Subst.rename (avoid : Finset Var) : Subst := fun x => var <| freshVar x avoid
+def Subst.ren (avoid : Finset Var) : Subst := fun x => var <| freshVar x avoid
 
 #print Subst.scomp
 #check Subst.scompApply
@@ -1325,8 +1325,8 @@ def Subst.joinAvoiding (σ₁ : Subst) (σ₂ : Subst) (S : Finset Var) : Subst 
   fun x => if x ∈ S then σ₂ x else σ₁ (freshVarInv x S)
 
 lemma joinAvoidingApply₁ (σ₁ : Subst) (σ₂ : Subst)
-  : (Subst.rename S).scomp (σ₁.joinAvoiding σ₂ S) = σ₁ := by
-  funext x; simp [Subst.scomp, Subst.rename, apply, Subst.joinAvoiding]
+  : (Subst.ren S).scomp (σ₁.joinAvoiding σ₂ S) = σ₁ := by
+  funext x; simp [Subst.scomp, Subst.ren, apply, Subst.joinAvoiding]
   simp [freshVarNotIn, freshVarInvInv]
 
 lemma joinAvoidingApply₂ {t : Term} {σ₁ σ₂ : Subst}
@@ -1339,17 +1339,27 @@ lemma joinAvoidingApply₂ {t : Term} {σ₁ σ₂ : Subst}
   case func _ => simp [apply]
   case app h₁ h₂ => simp [apply, vars]; grind
 
--- FIXME: is this the right lemma?
-lemma matchMGUAvoid {t₁ t₂ : Term}
-  (h₁ : t₁.apply σ₁ = t')
-  (h₂ : t₂.apply σ₂ = t')
-  : Unify (t₁.apply <| Subst.rename t₂.vars) t₂ := by
-  simp [Unify, Unifier]
-  exists σ₁.joinAvoiding σ₂ t₂.vars
-  rw [← Subst.scompApply]
-  simp [joinAvoidingApply₁, joinAvoidingApply₂]; grind
 
-#print PreCriticalPair.joins
+-- FIXME: is this the right lemma?
+lemma matchUnifies {t₁ t₂ : Term}
+  (h : t₁.apply σ₁ = t₂.apply σ₂)
+  (h' : t₂.vars ⊆ S)
+  : Unifier (σ₁.joinAvoiding σ₂ S) (t₁.apply <| Subst.ren S) t₂ := by
+  simp [Unifier]
+  rw [← Subst.scompApply]
+  simp [joinAvoidingApply₁]
+  rw [joinAvoidingApply₂] <;> grind
+
+
+lemma matchUnify {t₁ t₂ : Term}
+  (h : t₁.apply σ₁ = t₂.apply σ₂)
+  (_ : t₂.vars ⊆ S)
+  : Unify (t₁.apply <| Subst.ren S) t₂ := by
+  exists σ₁.joinAvoiding σ₂ t₂.vars
+  apply matchUnifies <;> trivial
+
+#check unifyComplete
+
 
 structure CriticalPair (ℛ : Rules) where
   ru₁ : Rule
@@ -1359,17 +1369,115 @@ structure CriticalPair (ℛ : Rules) where
   p : Position
   valid_p : p.valid ru₁.lhs
   unifies : unify
-   (p.get ru₁.lhs valid_p |>.apply (Subst.rename ru₂.lhs.vars))
+   (p.get ru₁.lhs valid_p |>.apply (Subst.ren (ru₂.lhs.vars ∪ ru₂.rhs.vars)))
    ru₂.lhs
    |>.isSome
 
 def CriticalPair.joins (cp : CriticalPair ℛ) : Prop :=
-  let renTerm := cp.p.get cp.ru₁.lhs cp.valid_p
-                 |>.apply (Subst.rename cp.ru₂.lhs.vars)
-  let mgu := unify renTerm cp.ru₂.lhs |>.get cp.unifies
-  let lhs : RTerm ℛ := cp.ru₁.rhs.apply mgu
-  let rhs : RTerm ℛ := (cp.ru₁.lhs.apply mgu).substAt cp.p (validSubst mgu cp.valid_p)
-                        (cp.ru₂.rhs.apply mgu)
+  let avoids := cp.ru₂.lhs.vars ∪ cp.ru₂.rhs.vars
+  let renMatch := cp.p.get cp.ru₁.lhs cp.valid_p
+                 |>.apply (Subst.ren avoids)
+  let mgu := unify renMatch cp.ru₂.lhs |>.get cp.unifies
+  let lhs : RTerm ℛ := cp.ru₁.rhs.apply (Subst.ren avoids) |>.apply mgu
+  let rhs : RTerm ℛ :=
+    (cp.ru₁.lhs.apply (Subst.ren avoids) |>.apply mgu).substAt cp.p
+    (validSubst mgu (validSubst (Subst.ren avoids) cp.valid_p))
+    (cp.ru₂.rhs.apply mgu)
   lhs ~>*.*<~ rhs
 
-def criticalOfPreCritical (cp : PreCriticalPair ℛ) : CriticalPair ℛ := sorry
+lemma UnifySymm  (h : Unify t u) : Unify u t := by
+  rcases h with ⟨σ, _⟩
+  exists σ; apply unifierSymm; trivial
+
+#print PreCriticalPair
+
+lemma unifCritIsSome
+  (cp : PreCriticalPair ℛ)
+  : (unify ((cp.p.get cp.r₁.lhs cp.valid_p).apply (Subst.ren cp.r₂.lhs.vars)) cp.r₂.lhs).isSome := by
+  apply unifyProgress
+  apply matchUnifies
+  . have h := cp.mtch₂
+    simp [Rule.matchesAt] at h
+    rw [← getSubst, h]
+  . simp
+
+def criticalOfPreCritical (cp : PreCriticalPair ℛ) : CriticalPair ℛ :=
+  CriticalPair.mk
+    cp.r₁
+    cp.r₂
+    cp.mem₁
+    cp.mem₂
+    cp.p
+    cp.valid_p
+    (unifCritIsSome cp)
+
+#check unifyComplete'
+#check Reduces.substTrans
+
+-- ugh
+lemma rwSubstApply
+  {t u : Term}
+  {σ σ' : Subst}
+  {p : Position}
+  (h₁ : p.valid t)
+  (h₃ : σ' = σ)
+  (h₂ : p.valid (t.apply σ))
+  : (t.apply σ).substAt p h₂ u = (t.apply σ').substAt p (validSubst σ' h₁) u := by
+  symm at h₃
+  congr
+
+-- can't believe I haven't needed this
+lemma substSubstAt {t u : Term}
+  (h : p.valid t)
+  (h' : p.valid (t.apply σ))
+  : (t.substAt p h u).apply σ = (t.apply σ).substAt p h' (u.apply σ) := by
+  revert h h'
+  match p, t with
+  | [], _ => simp [substAt]
+  | left::_, _ @@ _ => simp [apply, substAt, valid]; apply substSubstAt
+  | right::_, _ @@ _ => simp [apply, substAt, valid]; apply substSubstAt
+  | _::_, var _ => simp [valid]
+  | _::_, func _ => simp [valid]
+
+lemma joinSubst {t u : RTerm ℛ}
+  (joins_t_u : t ~>*.*<~ u)
+  : t.apply σ ~>*.*<~ u.apply σ := by
+  have ⟨v, _⟩ := joins_t_u
+  simp [joins]; exists (v.apply σ)
+  apply And.intro <;> apply Reduces.substTrans <;> grind
+
+lemma JoinsCPImpJoinsPC
+  (cp : PreCriticalPair ℛ)
+  (joins : (criticalOfPreCritical cp).joins)
+  : cp.joins := by
+  cases cp
+  case _ r₁ r₂ mem₁ mem₂ σ₁ σ₂ p valid_p nvar mtch =>
+  simp [criticalOfPreCritical, CriticalPair.joins] at joins
+  simp [PreCriticalPair.joins]
+  simp [Rule.matchesAt] at mtch
+  have h := matchUnifies (σ₁:=σ₁) (σ₂:=σ₂) (t₁ := p.get r₁.lhs valid_p) (t₂ := r₂.lhs) (S := r₂.lhs.vars ∪ r₂.rhs.vars)
+            (by rw [← getSubst]; symm; trivial)
+            (by simp)
+  have ⟨τ, isUnif⟩ := unifyComplete h
+  rw (occs:= .pos [1]) [← joinAvoidingApply₁ (σ₁:=σ₁) (σ₂:=σ₂) (S := r₂.lhs.vars ∪ r₂.rhs.vars)]
+  have h := joinAvoidingApply₂ (t:=r₂.rhs) (σ₁:=σ₁) (σ₂:=σ₂) (S := r₂.lhs.vars ∪ r₂.rhs.vars) (by simp)
+  rw [← h]
+  rw [
+      rwSubstApply valid_p
+        (joinAvoidingApply₁ (σ₁:=σ₁) (σ₂:=σ₂) (S := r₂.lhs.vars ∪ r₂.rhs.vars))
+         (u:=(r₂.rhs.apply (σ₁.joinAvoiding σ₂ (r₂.lhs.vars ∪ r₂.rhs.vars))))]
+  simp [Subst.scompApply]
+  rw [isUnif]
+  simp [Subst.scompApply] -- horror!!!!
+  rw [← substSubstAt]
+  . apply joinSubst
+    trivial
+
+-- This is the main theorem: any failure to be locally confluent *must* come from
+-- a non-joinable critical pair.
+-- The converse is true as well, but we only state the "if" direction
+theorem criticalPairLemma {ℛ : Rules}
+  (joinable : ∀ cp : CriticalPair ℛ, cp.joins)
+  : weakly_confluent (termRed ℛ) := by
+  apply PreCritJoinableWC
+  grind [JoinsCPImpJoinsPC]

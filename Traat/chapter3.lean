@@ -1039,7 +1039,6 @@ termination_by ltState st
 decreasing_by
   grind [decltState]
 
-
 theorem unifyProgress
   (unif : Unifier σ t u)
  : unify t u |>.isSome := by
@@ -1047,6 +1046,12 @@ theorem unifyProgress
  apply unify_auxProgress (σ := σ)
  apply StateUnifierIsUnifier; grind
 
+lemma unifyProgress'
+  (unif : Unify t u)
+  : unify t u |>.isSome :=
+  by
+    have ⟨σ, _⟩ := unif
+    apply unifyProgress; trivial
 
 lemma unifyComplete'
   (unif : Unifier σ t u)
