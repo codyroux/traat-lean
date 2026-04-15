@@ -1,4 +1,5 @@
 import Traat.chapter3
+import Mathlib.Data.Finset.Max
 
 section Position
 
@@ -1296,18 +1297,67 @@ theorem PreCritJoinableWC {ℛ : Rules}
   . rw [rew₁, rew₂]; apply swap_joins; apply joinableInc <;> grind
   . rw [rew₁, rew₂]; apply joinableOrth <;> grind
 
--- Magic
+#print Finset.map
+#print Var
+#print String
+#check String.ofList
+
+-- breaks abstraction.
+private def getStringPrefix (avoid : Finset Var) (h : avoid.Nonempty) : String :=
+  let avoidLen : Finset ℕ := avoid.image String.length
+  let max := avoidLen.max' (by simp [avoidLen]; exact h)
+  List.replicate (max+1) '_' |> String.ofList
+
+-- Magic. Needs to be injective!
 def freshVar (base : Var) (avoid : Finset Var) : Var :=
-  sorry
+  if h: avoid.Nonempty then
+    let base' : String := base
+    (getStringPrefix avoid h) ++ base'
+  else
+    base
+
+#check String.drop
 
 -- Jeesh
-def freshVarInv (renamed : Var) (avoid : Finset Var) : Var := sorry
+def freshVarInv (renamed : Var) (avoid : Finset Var) : Var :=
+  if h: avoid.Nonempty then
+    let dropLen := getStringPrefix avoid h |>.length
+    renamed |>.toList.drop dropLen |> String.ofList
+  else
+    renamed
+
+#check Finset.mem_image_of_mem
+#check String.length_append
+#check Finset.max'_eq_iff
 
 lemma freshVarNotIn
-  : freshVar x S ∉ S := by sorry
+  : freshVar x S ∉ S := by
+  simp [freshVar]
+  by_cases h:(S.Nonempty) <;> simp [h]
+  . simp [getStringPrefix]
+    intro h'
+    have h' := Finset.mem_image_of_mem String.length h'
+    simp at h'
+    have ⟨a, h'⟩ := h'
+    have h'' : ∀ b ∈ S, b.length < (Finset.image String.length S).max' (by simp; exact h) + 1 := by
+      intros b mem
+      have h : (String.length b ∈ Finset.image String.length S) := by simp [Finset.mem_image]; exists b
+      have h := Finset.le_max' _ _ h
+      grind
+    have h'' := h'' a h'.1
+    grind
+  . simp at h; simp [h]
+
+#check List.drop_append_length
+#check String.ofList_append
+#check String.ofList_toList
+#check String.toList_ofList
+#check List.toString
 
 lemma freshVarInvInv :
-  freshVarInv (freshVar x S) S = x := by sorry
+  freshVarInv (freshVar x S) S = x := by
+  simp [freshVar, freshVarInv]
+  by_cases h:S.Nonempty <;> simp [h]
 
 lemma freshVarDistinct
   (neq : x ≠ y)
@@ -1355,7 +1405,7 @@ lemma matchUnify {t₁ t₂ : Term}
   (h : t₁.apply σ₁ = t₂.apply σ₂)
   (_ : t₂.vars ⊆ S)
   : Unify (t₁.apply <| Subst.ren S) t₂ := by
-  exists σ₁.joinAvoiding σ₂ t₂.vars
+  exists σ₁.joinAvoiding σ₂ S
   apply matchUnifies <;> trivial
 
 #check unifyComplete
@@ -1393,7 +1443,8 @@ lemma UnifySymm  (h : Unify t u) : Unify u t := by
 
 lemma unifCritIsSome
   (cp : PreCriticalPair ℛ)
-  : (unify ((cp.p.get cp.r₁.lhs cp.valid_p).apply (Subst.ren cp.r₂.lhs.vars)) cp.r₂.lhs).isSome := by
+  : (unify ((cp.p.get cp.r₁.lhs cp.valid_p).apply (Subst.ren <| cp.r₂.lhs.vars ∪ cp.r₂.rhs.vars))
+            cp.r₂.lhs).isSome := by
   apply unifyProgress
   apply matchUnifies
   . have h := cp.mtch₂
