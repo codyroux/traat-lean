@@ -50,7 +50,7 @@ def Subst.scomp (σ : Subst) (τ : Subst) : Subst :=
   fun x => (σ x).apply τ
 
 @[simp]
-lemma Subst.scompApply (σ τ : Subst) (t : Term)
+lemma Subst.scomp_apply (σ τ : Subst) (t : Term)
   : t.apply (σ.scomp τ) = (t.apply σ).apply τ := by
   induction t <;> simp [apply, Subst.scomp]
   grind
@@ -58,17 +58,17 @@ lemma Subst.scompApply (σ τ : Subst) (t : Term)
 abbrev Subst.idSubst : Subst := var
 
 @[grind =_]
-lemma Term.subst_id (t : Term) : t = t.apply Subst.idSubst := by induction t <;> grind [Term.apply]
+lemma Term.apply_idSubst (t : Term) : t = t.apply Subst.idSubst := by induction t <;> grind [Term.apply]
 
 @[simp, grind =]
 lemma idSubst_apply (t : Term) : t.apply Subst.idSubst = t := by grind
 
 @[simp, grind =]
-lemma scompIdsubst (σ : Subst) : σ.scomp Subst.idSubst = σ := by
+lemma scomp_idSubst (σ : Subst) : σ.scomp Subst.idSubst = σ := by
   funext; simp [Subst.scomp]
 
 @[simp, grind =]
-lemma scompIdsubst_l (σ : Subst) : Subst.idSubst.scomp σ = σ := by
+lemma idSubst_scomp (σ : Subst) : Subst.idSubst.scomp σ = σ := by
   funext; simp [Subst.scomp, apply]
 
 
@@ -226,7 +226,7 @@ infix:25 " ⊧ " => models
 
 example : {} ⊧ "f" @@ var "x" ≅ "f" @@ var "x" := by simp
 
-lemma subst_eval [M : Model ℳ] (θ : Valuation ℳ) σ t : ⦃t.apply σ⦄ θ = ⦃t⦄ (fun x => ⦃σ x⦄ θ) := by
+lemma eval_apply [M : Model ℳ] (θ : Valuation ℳ) σ t : ⦃t.apply σ⦄ θ = ⦃t⦄ (fun x => ⦃σ x⦄ θ) := by
   induction t <;> simp [Term.apply, Term.eval]
   case _ => grind
 
@@ -253,7 +253,7 @@ theorem soundness : Γ ⊢ E → Γ ⊧ E := by
     intros _ _ _ θ
     let θ' := fun x => ⦃σ x⦄ θ
     have h := h _ (by trivial) θ'
-    rewrite [subst_eval]; rewrite [subst_eval] -- why does repeat rewrite not work?
+    rewrite [eval_apply]; rewrite [eval_apply] -- why does repeat rewrite not work?
     exact h
 
 -- Ok now for completeness. Let's build a little term model.
@@ -269,7 +269,7 @@ def EqCtxRel Γ : Equivalence (CtxtRel Γ) where
   symm := by grind [CtxtRel]
   trans := by grind [CtxtRel]
 
-lemma ctxtRelCongr (Γ : Ctxt) (t₁ t₂ u₁ u₂ : Term) :
+lemma CtxtRel.congr (Γ : Ctxt) (t₁ t₂ u₁ u₂ : Term) :
   CtxtRel Γ t₁ t₂ → CtxtRel Γ u₁ u₂ → CtxtRel Γ (t₁ @@ u₁) (t₂ @@ u₂) := by
   grind [CtxtRel]
 
@@ -285,11 +285,11 @@ def TermModel (Γ : Ctxt) := Quotient <| SetoidCtx Γ
 -- the "term model"
 instance ModelSetoidCtx (Γ : Ctxt) : Model (TermModel Γ) where
   interp f := ⟦ func f ⟧
-  app t₁ t₂ := Quotient.map₂ (· @@ ·) (by intros; apply ctxtRelCongr <;> trivial) t₁ t₂
+  app t₁ t₂ := Quotient.map₂ (· @@ ·) (by intros; apply CtxtRel.congr <;> trivial) t₁ t₂
 
 #check Quotient.eq_iff_equiv
 
-lemma subst_term_model (Γ : Ctxt) (t : Term) (σ : Subst) :
+lemma Term.apply_termModel (Γ : Ctxt) (t : Term) (σ : Subst) :
   let t_σ : TermModel Γ := ⟦t.apply σ⟧
   let t_θ : TermModel Γ := ⦃ t ⦄ (fun x => ⟦σ x⟧)
   t_σ = t_θ := by
@@ -302,10 +302,10 @@ lemma subst_term_model (Γ : Ctxt) (t : Term) (σ : Subst) :
 #check Quotient.out
 #check Quotient.out_eq
 
-lemma subst_lift (Γ : Ctxt) (t : Term) (θ : Valuation (TermModel Γ)) :
+lemma Term.lift_apply (Γ : Ctxt) (t : Term) (θ : Valuation (TermModel Γ)) :
   let lift_θ : Subst := fun x => (θ x).out
   ⟦ t.apply lift_θ ⟧ = ⦃ t ⦄ θ := by
-  simp; rw [subst_term_model]; congr
+  simp; rw [Term.apply_termModel]; congr
   funext; simp
 
 #print TermModel
@@ -314,13 +314,13 @@ theorem completeness (Γ : Ctxt) (E : FormalEq) : Γ ⊧ E → Γ ⊢ E := by
   intros models
   have h : (∀ E ∈ Γ, ∀ (θ : Valuation (TermModel Γ)), ⦃E.lhs⦄ θ = ⦃E.rhs⦄ θ) := by
     intros E mem θ
-    rw [← subst_lift]; rw [← subst_lift, Quotient.eq_iff_equiv]
+    rw [← Term.lift_apply]; rw [← Term.lift_apply, Quotient.eq_iff_equiv]
     simp [HasEquiv.Equiv]
     apply Derives.subst; apply Derives.ax; exact mem
   have models := models (TermModel Γ) h (fun x => ⟦var x⟧); simp at models
-  rw [← subst_term_model] at models
-  rw [← subst_term_model, Quotient.eq_iff_equiv, ← subst_id] at models
-  rw [← subst_id] at models; exact models
+  rw [← Term.apply_termModel] at models
+  rw [← Term.apply_termModel, Quotient.eq_iff_equiv, ← apply_idSubst] at models
+  rw [← apply_idSubst] at models; exact models
 
 end Equational
 
@@ -374,30 +374,30 @@ def RToE (ℛ : Rules) : Ctxt := (fun e => ⟨e.lhs, e.rhs⟩)'' ℛ
 @[simp]
 def RTerm.apply {ℛ : Rules} (t : RTerm ℛ) (σ : Subst) : RTerm ℛ := Term.apply t σ
 
-lemma Reduces.subst {ℛ : Rules} {t u : RTerm ℛ} (σ : Subst) (red : t ~> u)
+lemma Reduces.apply {ℛ : Rules} {t u : RTerm ℛ} (σ : Subst) (red : t ~> u)
  : t.apply σ ~> u.apply σ := by
   simp [Red.reduces] at red; induction red <;> simp [apply]
   case _ l r τ mem =>
-   rw [← Subst.scompApply]; rw [← Subst.scompApply]
+   rw [← Subst.scomp_apply]; rw [← Subst.scomp_apply]
    exact Reduces.head (ℛ := ℛ) (l:=l) (r:=r) (σ := τ.scomp σ) mem
   case _ => apply Reduces.congrLeft; trivial
   case _ => apply Reduces.congrRight; trivial
 
-lemma Reduces.substTrans {ℛ : Rules} (t u : RTerm ℛ) (red : t ~>* u)
+lemma Reduces.refl_trans_clos_apply {ℛ : Rules} (t u : RTerm ℛ) (red : t ~>* u)
  : t.apply σ ~>* u.apply σ := by
   induction red
   case _ => constructor
   case _ a b c red red' ih =>
-    have h := Reduces.subst σ red
+    have h := Reduces.apply σ red
     grind
 
-lemma Reduces.substReflSymTrans {ℛ : Rules} (t u : RTerm ℛ) (red : t <~>* u)
+lemma Reduces.refl_trans_sym_clos_apply {ℛ : Rules} (t u : RTerm ℛ) (red : t <~>* u)
  : t.apply σ <~>* u.apply σ := by
   induction red
   case _ => constructor
   case _ =>
     apply refl_trans_sym_clos.base
-    apply Reduces.subst; trivial
+    apply Reduces.apply; trivial
   case _ _ b _ _ _ ih₁ ih₂ =>
     apply refl_trans_sym_clos.trans (b:=b.apply σ)
     . apply ih₁
@@ -411,7 +411,7 @@ def RTerm.app {ℛ} (t₁ t₂ : RTerm ℛ) : RTerm ℛ := t₁ @@ t₂
 infix:30 " @@@ " => RTerm.app
 
 -- TODO: do the `~>*` versions also
-lemma Reduces.congReflTransL {ℛ : Rules}
+lemma Reduces.refl_trans_clos_congr_left {ℛ : Rules}
  (t₁ t₂ u : RTerm ℛ)
  (red : t₁ ~>* t₂)
  : (t₁ @@@ u) ~>* (t₂ @@@ u) := by
@@ -421,7 +421,7 @@ lemma Reduces.congReflTransL {ℛ : Rules}
     apply refl_trans_clos.step; constructor; trivial
     trivial
 
-lemma Reduces.congReflTransR {ℛ : Rules}
+lemma Reduces.refl_trans_clos_congr_right {ℛ : Rules}
  (t u₁ u₂ : RTerm ℛ)
  (red : u₁ ~>* u₂)
  : (t @@@ u₁) ~>* (t @@@ u₂) := by
@@ -431,16 +431,16 @@ lemma Reduces.congReflTransR {ℛ : Rules}
     apply refl_trans_clos.step; apply Reduces.congrRight <;> trivial
     trivial
 
-lemma Reduces.congReflTrans {ℛ : Rules}
+lemma Reduces.refl_trans_clos_congr {ℛ : Rules}
  (t₁ t₂ u₁ u₂ : RTerm ℛ)
  (red₁ : t₁ ~>* t₂)
  (red₂ : u₁ ~>* u₂)
  : (t₁ @@@ u₁) ~>* (t₂ @@@ u₂) := by
-  apply refl_trans_clos_transitive (y := t₂ @@@ u₁)
-  . apply Reduces.congReflTransL; grind
-  . apply Reduces.congReflTransR; grind
+  apply refl_trans_clos_trans (y := t₂ @@@ u₁)
+  . apply Reduces.refl_trans_clos_congr_left; grind
+  . apply Reduces.refl_trans_clos_congr_right; grind
 
-lemma Reduces.congReflSymTransL {ℛ : Rules}
+lemma Reduces.refl_trans_sym_clos_congr_left {ℛ : Rules}
  (t₁ t₂ u : RTerm ℛ)
  (red : t₁ <~>* t₂)
  : (t₁ @@@ u) <~>* (t₂ @@@ u) := by
@@ -454,7 +454,7 @@ lemma Reduces.congReflSymTransL {ℛ : Rules}
     . apply ih₂
   case _ ih => apply refl_trans_sym_clos.inv; apply ih
 
-lemma Reduces.congReflSymTransR {ℛ : Rules}
+lemma Reduces.refl_trans_sym_clos_congr_right {ℛ : Rules}
  (t u₁ u₂ : RTerm ℛ)
  (red : u₁ <~>* u₂)
  : (t @@@ u₁) <~>* (t @@@ u₂) := by
@@ -468,16 +468,16 @@ lemma Reduces.congReflSymTransR {ℛ : Rules}
     . apply ih₂
   case _ ih => apply refl_trans_sym_clos.inv; apply ih
 
-lemma Reduces.congReflSymTrans {ℛ : Rules}
+lemma Reduces.refl_trans_sym_clos_congr {ℛ : Rules}
  (t₁ t₂ u₁ u₂ : RTerm ℛ)
  (red₁ : t₁ <~>* t₂)
  (red₂ : u₁ <~>* u₂)
  : (t₁ @@@ u₁) <~>* (t₂ @@@ u₂) := by
   apply refl_trans_sym_clos.trans (b := t₂ @@@ u₁)
-  . apply Reduces.congReflSymTransL; grind
-  . apply Reduces.congReflSymTransR; grind
+  . apply Reduces.refl_trans_sym_clos_congr_left; grind
+  . apply Reduces.refl_trans_sym_clos_congr_right; grind
 
-lemma RewIsEq_step (ℛ : Rules) (t u : RTerm ℛ) (red : t ~> u) : RToE ℛ ⊢ t ≅ u := by
+lemma derives_of_reduces (ℛ : Rules) (t u : RTerm ℛ) (red : t ~> u) : RToE ℛ ⊢ t ≅ u := by
   simp [Red.reduces] at red; induction red
   case _ l r _ mem =>
     apply Derives.subst; constructor
@@ -486,18 +486,18 @@ lemma RewIsEq_step (ℛ : Rules) (t u : RTerm ℛ) (red : t ~> u) : RToE ℛ ⊢
   case _ => apply Derives.congr <;> grind
   case _ => apply Derives.congr <;> grind
 
-theorem RewIsEq (ℛ : Rules) (t u : RTerm ℛ) (red : t ~>* u) : RToE ℛ ⊢ t ≅ u := by
+theorem derives_of_refl_trans_clos (ℛ : Rules) (t u : RTerm ℛ) (red : t ~>* u) : RToE ℛ ⊢ t ≅ u := by
   induction red
   case _ => grind
   case _ a b c red red' ih =>
     have h : RToE ℛ ⊢ a ≅ b := by
-      apply RewIsEq_step; grind
+      apply derives_of_reduces; grind
     grind
 
 #print Red
 #print Reduces
 
-theorem EqIsRew_aux (Γ : Ctxt) (eqProof : Γ ⊢ E) :
+theorem refl_trans_sym_clos_of_derives_aux (Γ : Ctxt) (eqProof : Γ ⊢ E) :
   refl_trans_sym_clos (Reduces (EToR Γ)) E.lhs E.rhs := by
   induction eqProof
   case _ t u mem =>
@@ -513,14 +513,14 @@ theorem EqIsRew_aux (Γ : Ctxt) (eqProof : Γ ⊢ E) :
     apply refl_trans_sym_clos.trans <;> simp at * <;> trivial
   case _ =>
     simp at *
-    apply Reduces.congReflSymTrans <;> trivial
+    apply Reduces.refl_trans_sym_clos_congr <;> trivial
   case _ =>
     simp at *
-    apply Reduces.substReflSymTrans
+    apply Reduces.refl_trans_sym_clos_apply
     trivial
 
-theorem EqIsRew (Γ : Ctxt) (t u : RTerm (EToR Γ)) (eqProof : Γ ⊢ t ≅ u) : t <~>* u := by
+theorem refl_trans_sym_clos_of_derives (Γ : Ctxt) (t u : RTerm (EToR Γ)) (eqProof : Γ ⊢ t ≅ u) : t <~>* u := by
   simp [Red.reduces]
-  apply EqIsRew_aux (E := ⟨t, u⟩); grind
+  apply refl_trans_sym_clos_of_derives_aux (E := ⟨t, u⟩); grind
 
 end Rewriting
