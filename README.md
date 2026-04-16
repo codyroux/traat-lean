@@ -25,3 +25,6 @@ Soundness and completeness of syntactic unification.
 
 The proofs are a bit of a mess, but the theorem should be relatively convenient to use. Some slight departure from the book proof, but nothing crazy.
 
+## Critical Pairs
+
+A Full formalization of the critical pair criterion for local convergeance. Since our terms are applicative, we can use sequences of `left | right` terms as positions.
