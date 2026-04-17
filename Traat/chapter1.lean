@@ -315,45 +315,64 @@ by
     exists (λ n ↦ (f n).val)
     grind
 
--- This is the "real" def of normalization, or at least the
--- one that's actually useful.
-lemma normalizes_induction [R : Red A] : ∀ P : A → Prop,
-  (∀ x, (∀ y, x ~> y → P y) → P x) → ∀ x, normalizes x → P x :=
+
+#print Acc
+#print flip
+
+lemma Acc.contra
+  {A : Type}
+  {R : A → A → Prop}
+  {x : A}
+  (n_acc : ¬ Acc R x)
+  : ∃ y, ¬ Acc R y ∧ R y x := by
+  apply Classical.by_contradiction
+  intros h; simp at h
+  apply n_acc; apply Acc.intro; grind
+
+lemma Acc.of_normalizes [R : Red A] : ∀ x, normalizes x → Acc (flip R.reduces) x :=
 by
-  intros P IH x norm
+  intros x norm
+  apply Acc.intro
   apply Classical.byContradiction
   intro h; apply norm
-  have h' : ∃ f : ℕ → A, f 0 = x ∧ ∀ n, ¬ P (f n) ∧ f n ~> f (n+1) :=
+  have h' : ∃ f : ℕ → A, f 0 = x ∧ ∀ n, ¬ Acc (flip R.reduces) (f n) ∧ f n ~> f (n+1) :=
   by
-    apply (dependent_choice''  (λ a ↦ ¬ P a)) <;> grind
+    apply (dependent_choice''  (λ a ↦ ¬ Acc (flip R.reduces) a))
+    . intro acc_x; apply h
+      intros y red
+      cases acc_x; trivial
+    . intros a nacc
+      apply Acc.contra; trivial
   rw [diverge_from]
   match h' with
   | Exists.intro xs _ =>
     exists xs; grind
 
+-- This is the "real" def of normalization, or at least the
+-- one that's actually useful.
+lemma normalizes_induction [R : Red A] : ∀ P : A → Prop,
+  (∀ x, (∀ y, x ~> y → P y) → P x) → ∀ x, normalizes x → P x := by
+  intros P ind x norm
+  have acc := Acc.of_normalizes x norm
+  clear norm
+  induction acc
+  simp [flip] at *
+  grind
 
-lemma normalizing_induction [R : Red A] : ∀ P : A → Prop,
-  (∀ x, (∀ y, x ~> y → P y) → P x) → normalizing R → ∀ x, P x :=
-by
-  intros P IH norm x
-  apply normalizes_induction
-  . apply IH
-  . apply norm
-
-
-lemma normalizing_of_induction [R : Red A] :
-   (∀ P : A → Prop, (∀ x, (∀ y, x ~> y → P y) → P x) → ∀ x, P x) → normalizing R :=
-by
-  intros ih x
-  apply ih
-  intros x red_norm div
-  cases div
-  case _ f h =>
-    apply red_norm
+#print WellFounded
+lemma normalizing_iff_wf_flip [R : Red A] :
+  normalizing R ↔ WellFounded (flip R.reduces) := by
+  apply Iff.intro
+  . intros; constructor; intro; apply Acc.of_normalizes; grind
+  . intro wf x div
+    have ⟨acc⟩ := wf
+    induction acc x
+    case _ x h ih =>
+    have ⟨f, h⟩ := div
+    apply ih; simp [flip]
     . simp [← h.1]
       apply h.2 0
-    . exists (λ n ↦ f (n+1))
-      grind
+    . exists (fun n => f (n+1)); grind
 
 @[grind .]
 lemma refl_trans_clos_step_trans [R : Red A] : ∀ x y z : A, x ~> y → y ~>* z → x ~>* z :=
@@ -589,17 +608,27 @@ inductive close_below (P : A → Prop) : A → Prop where
 -- Sometimes it's easier to work with the transitive closure for WF induction.
 lemma normalizing_trans_clos [R : Red A] : normalizing R → normalizing (R := ⟨trans_clos R.reduces⟩) :=
 by
-  intros norm
-  apply normalizing_of_induction (R := ⟨trans_clos (R.reduces)⟩)
-  intros P ih
-  let Q := λ x ↦ P x ∧ ∀ y, x ~>+ y → P y
-  have h : ∀ x, Q x :=
-  by
-    intros x
-    apply normalizing_induction
-    case _ => simp [Q]; grind
-    case _ => trivial
-  grind
+  -- here a bit of tedium because we go through WellFounded which confuses grind.
+  rw [normalizing_iff_wf_flip]
+  rw [normalizing_iff_wf_flip (R := ⟨trans_clos (R.reduces)⟩)]
+  rintro ⟨acc⟩; constructor; intro a
+  -- we gotta strengthen the goal
+  have strengthen : Acc (flip <| trans_clos R.reduces) a ∧
+    ∀ b, a ~>+ b → Acc (flip <| trans_clos R.reduces) b := by
+    induction acc a
+    case _ a _ ih =>
+    constructor
+    . constructor; intros z red
+      cases red
+      case _ red => have h := ih z red; exact h.1
+      case _ b red₁ red₂ =>
+        have h := ih b red₁
+        apply h.2; apply red₂
+    . intros b red
+      cases red
+      case _ red => have h := ih b red; exact h.1
+      case _ c red₁ red₂ => have h := ih c red₁; apply h.2; exact red₂
+  apply strengthen.1
 
 -- When proving confluence, it's sometimes tedious to always handle the reflexive case.
 def confluent' [R : Red A] := ∀ x y z : A, x ~>+ y → x ~>+ z → y ~>*.*<~ z
