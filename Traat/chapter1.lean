@@ -61,11 +61,11 @@ infixl:50 " <~>* "  => refl_trans_sym_clos_red
 
 @[simp]
 lemma le_apply {A : Type} (R R' : A → A → Prop) (x y : A) : R ≤ R' → R x y → R' x y := by
-  simp [LE.le]; grind
+  simp only [LE.le]; grind
 
 @[simp, grind .]
 lemma reduces_mono {A} {R : Red A} {R' : Red A} x y : R.reduces ≤ R'.reduces → reduces (self:=R) x y → reduces (self:=R') x y := by
-  simp [LE.le]; grind
+  simp only [LE.le]; grind
 
 @[simp, grind .]
 lemma rel_le_antisymm {A : Type} {R R' : A → A → Prop} : R ≤ R' → R' ≤ R → R = R' := by
@@ -83,27 +83,27 @@ lemma rel_ge_of_eq {A : Type} {R R' : A → A → Prop} : R = R' → R' ≤ R :=
 lemma trans_clos_monotone {A : Type} (R R' : A → A → Prop) : R ≤ R' →
   trans_clos R ≤ trans_clos R' := by
   intros le x y tr
-  induction tr <;> simp [LE.le] at * <;> grind
+  induction tr <;> simp only [LE.le] at * <;> grind
 
 
 @[simp]
 lemma refl_trans_clos_monotone {A : Type} (R R' : A → A → Prop) : R ≤ R' →
   refl_trans_clos R ≤ refl_trans_clos R' := by
   intros le x y tr
-  induction tr <;> simp [LE.le] at * <;> grind
+  induction tr <;> simp only [LE.le] at * <;> grind
 
 
 @[simp]
 lemma sym_clos_monotone {A : Type} (R R' : A → A → Prop) : R ≤ R' → sym_clos R ≤ sym_clos R' := by
   intros le x y sym
-  induction sym <;> simp [LE.le] at * <;> grind
+  induction sym <;> simp only [LE.le] at * <;> grind
 
 
 lemma refl_clos_monotone {A : Type} (R R' : A → A → Prop)
  : R ≤ R' → refl_clos R ≤ refl_clos R' :=
   by
     intros le x y re
-    induction re <;> simp [LE.le] at * <;> grind
+    induction re <;> simp only [LE.le] at * <;> grind
 
 lemma sym_clos_symm [R : Red A] (x y : A)
   (h : x <~> y)
@@ -235,7 +235,7 @@ def normal [R : Red A] (x : A) : Prop := ¬ (∃ x', x ~> x')
 
 theorem normalizes_of_normal [R : Red A] {x : A} : normal x → normalizes x :=
 by
-  simp [normal]
+  simp only [normal]
   intros norm_x div_x
   match div_x with
   | .intro _ _ => grind
@@ -259,10 +259,8 @@ by
   intros T P Q equiv ex_t
   cases ex_t; grind
 
-#print Classical.axiomOfChoice
-
 theorem iterate_left {A} (f : A → A) (n : ℕ) (x : A) : f^[n+1] x = f (f^[n] x) := by
-  simp [Nat.iterate]
+  simp only [Nat.iterate]
   revert x
   induction n <;> grind [Nat.iterate]
 
@@ -315,10 +313,6 @@ by
     exists (λ n ↦ (f n).val)
     grind
 
-
-#print Acc
-#print flip
-
 lemma Acc.contra
   {A : Type}
   {R : A → A → Prop}
@@ -356,10 +350,9 @@ lemma normalizes_induction [R : Red A] : ∀ P : A → Prop,
   have acc := Acc.of_normalizes x norm
   clear norm
   induction acc
-  simp [flip] at *
+  simp only [flip] at *
   grind
 
-#print WellFounded
 lemma normalizing_iff_wf_flip [R : Red A] :
   normalizing R ↔ WellFounded (flip R.reduces) := by
   apply Iff.intro
@@ -369,8 +362,8 @@ lemma normalizing_iff_wf_flip [R : Red A] :
     induction acc x
     case _ x h ih =>
     have ⟨f, h⟩ := div
-    apply ih; simp [flip]
-    . simp [← h.1]
+    apply ih; simp only [flip]
+    . simp only [← h.1]
       apply h.2 0
     . exists (fun n => f (n+1)); grind
 
@@ -415,12 +408,12 @@ def semi_confluent (R : Red A) :=
 lemma refl_trans_clos_le_refl_trans_sym_clos (R : A → A → Prop) :
   refl_trans_clos R ≤ refl_trans_sym_clos R :=
 by
-  simp [LE.le]
+  simp only [LE.le]
   intros x y red
   induction red <;> grind
 
 lemma wedge_le_refl_trans_sym_clos [R : Red A] : wedge (R:=R) ≤ refl_trans_sym_clos R.reduces := by
-  intros x y; simp [wedge]; intros z
+  intros x y; simp only [wedge, refl_trans_clos_red, le_Prop_eq, forall_exists_index, and_imp]; intros z
   intros; apply refl_trans_sym_clos.trans x z y
   case _ => apply refl_trans_sym_clos.inv; apply refl_trans_clos_le_refl_trans_sym_clos; trivial
   case _ => apply refl_trans_clos_le_refl_trans_sym_clos; trivial
@@ -548,7 +541,7 @@ def RX : X → X → Prop :=
 instance redX : Red X := ⟨RX⟩
 
 lemma not_joins_a_d : ¬ joins X.a X.d := by
-  simp [joins, reduces]; grind
+  simp only [joins, refl_trans_clos_red, reduces, not_exists, not_and]; grind
 
 
 lemma weakly_confluent_does_not_imply_confluent : ∃ (A : Type) (R : Red A),
@@ -557,14 +550,15 @@ by
   exists X, ⟨RX⟩
   constructor
   . intros x y z r_x_y r_x_z
-    simp [RX] at r_x_y
-    simp [RX] at r_x_z
+    simp only [RX] at r_x_y
+    simp only [RX] at r_x_z
     -- ugh this is tedious. Probably there's some nuclear tactic here (grind?)
     cases r_x_y <;> cases r_x_z <;> simp [*] at *
     . exists X.a; simp; grind
     . exists X.a; try constructor
       . constructor
-      . simp [*]; constructor; simp [RX]
+      . simp only [refl_trans_clos_red, *]; constructor; simp only [RX, reduceCtorEq, false_and,
+        true_and, false_or]
         . left; trivial
         . constructor; unfold RX; left; trivial; constructor
     . exists X.a; simp [*]; constructor
@@ -578,14 +572,14 @@ by
         cases h1 <;> cases h2 <;> simp [*] at *
         . exists X.b; repeat constructor
         . exists X.d; constructor
-          . constructor; simp [RX]; right; trivial
-            constructor; simp [RX]; right; trivial
+          . constructor; simp only [RX, true_and, reduceCtorEq, false_and, or_self, or_false]; right; trivial
+            constructor; simp only [RX, reduceCtorEq, false_and, true_and, false_or]; right; trivial
             constructor
           . constructor
         . exists X.d; constructor
           . constructor
-          . constructor; simp [RX]; right; trivial
-            constructor; simp [RX]; right; trivial
+          . constructor; simp only [RX, true_and, reduceCtorEq, false_and, or_self, or_false]; right; trivial
+            constructor; simp only [RX, reduceCtorEq, false_and, true_and, false_or]; right; trivial
             constructor
         . exists X.d; repeat constructor
   . intros h
@@ -641,7 +635,7 @@ by
   have h := eq_or_trans_clos_of_refl_trans_clos red_x_z
   cases h
   . case a.inl h =>
-    simp [← h]
+    simp only [← h]
     exists y ; simp; grind
   . apply conf' x y z <;> simp at * <;> grind
 
@@ -728,10 +722,10 @@ lemma trans_union_leq_union_trans (R R' : A → A → Prop) :
   cases h
   case _ =>
     apply trans_clos_monotone (R := R) <;> try trivial
-    intros a b; simp [LE.le, union]; grind
+    intros a b; simp only [LE.le, union]; grind
   case _ =>
     apply trans_clos_monotone (R := R') <;> try trivial
-    intros a b; simp [LE.le, union]; grind
+    intros a b; simp only [LE.le, union]; grind
 
 def comp (R R' : A → A → Prop) : A → A → Prop := fun x y => ∃ z, R x z ∧ R' z y
 
@@ -762,7 +756,7 @@ lemma confluent_of_le_diamond
     intros diamond'
     have h' := confluent_of_diamond diamond'
     have : confluent R'.toRed = confluent R.toRed := by
-      simp [confluent, wedge, joins, Red.reduces]
+      simp only [confluent, wedge, refl_trans_clos_red, reduces, joins]
       rw [h]
     grind
 
@@ -775,7 +769,7 @@ theorem confluent_union_of_commutes [R : Red₁ A] [R' : Red₂ A]
   let R₁ := union R.reduces R'.reduces
   let R₂ := comp (refl_trans_clos R.reduces) (refl_trans_clos R'.reduces)
   apply confluent_of_le_diamond (R := ⟨R₁⟩) (R' := ⟨R₂⟩)
-  . simp [R₁, R₂]; intros x y h
+  . simp only [R₁, R₂]; intros x y h
     cases h
     case _ h =>
       exists y; constructor
@@ -788,17 +782,17 @@ theorem confluent_union_of_commutes [R : Red₁ A] [R' : Red₂ A]
       . constructor; exact h
         constructor
   . intros x y h
-    simp [R₂, comp] at h
+    simp only [comp, R₂] at h
     let ⟨z, h₁, h₂⟩ := h
     have h₃ : refl_trans_clos R₁ x z := by
       apply refl_trans_clos_monotone Red₁.reduces R₁
-      . simp [R₁]; intros a b
-        simp [union]; grind
+      . simp only [R₁]; intros a b
+        simp only [union, le_Prop_eq]; grind
       . trivial
     have h₄ : refl_trans_clos R₁ z y := by
       apply refl_trans_clos_monotone Red₂.reduces R₁
-      . simp [R₁]; intros a b
-        simp [union]; grind
+      . simp only [R₁]; intros a b
+        simp only [union, le_Prop_eq]; grind
       . trivial
     grind
   . intros x y z

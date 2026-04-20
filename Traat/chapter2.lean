@@ -71,10 +71,6 @@ lemma scomp_idSubst (σ : Subst) : σ.scomp Subst.idSubst = σ := by
 lemma idSubst_scomp (σ : Subst) : Subst.idSubst.scomp σ = σ := by
   funext; simp [Subst.scomp, apply]
 
-
-#check Finset.disjUnion_eq_union
-#check Finset.instUnion
-
 def Term.vars : Term → Finset Var
 | var v => {v}
 | t₁ @@ t₂ => t₁.vars ∪ t₂.vars
@@ -171,11 +167,6 @@ match t with
 | func f => M.interp f
 | t₁ @@ t₂ => M.app (eval t₁ θ) (eval t₂ θ)
 
-
-#check ⟦3⟧
-#check Quotient.mk
-
-
 -- I guess ⟦ _ ⟧ is taken? Not sure how to overload
 notation "⦃" t:30 "⦄" => Term.eval t
 
@@ -227,7 +218,7 @@ infix:25 " ⊧ " => models
 example : {} ⊧ "f" @@ var "x" ≅ "f" @@ var "x" := by simp
 
 lemma eval_apply [M : Model ℳ] (θ : Valuation ℳ) σ t : ⦃t.apply σ⦄ θ = ⦃t⦄ (fun x => ⦃σ x⦄ θ) := by
-  induction t <;> simp [Term.apply, Term.eval]
+  induction t <;> simp only [Term.apply, Term.eval]
   case _ => grind
 
 theorem soundness : Γ ⊢ E → Γ ⊧ E := by
@@ -253,14 +244,10 @@ theorem soundness : Γ ⊢ E → Γ ⊧ E := by
     intros _ _ _ θ
     let θ' := fun x => ⦃σ x⦄ θ
     have h := h _ (by trivial) θ'
-    rewrite [eval_apply]; rewrite [eval_apply] -- why does repeat rewrite not work?
+    rw [eval_apply, eval_apply]
     exact h
 
 -- Ok now for completeness. Let's build a little term model.
-
-#check Quotient
-#print Setoid
-#print Equivalence
 
 def CtxtRel (Γ : Ctxt) (t u : Term) : Prop := Γ ⊢ t ≅ u
 
@@ -280,27 +267,20 @@ instance SetoidCtx (Γ : Ctxt) : Setoid Term where
 @[reducible]
 def TermModel (Γ : Ctxt) := Quotient <| SetoidCtx Γ
 
-#check Quotient.map₂'
-
 -- the "term model"
 instance ModelSetoidCtx (Γ : Ctxt) : Model (TermModel Γ) where
   interp f := ⟦ func f ⟧
   app t₁ t₂ := Quotient.map₂ (· @@ ·) (by intros; apply CtxtRel.congr <;> trivial) t₁ t₂
 
-#check Quotient.eq_iff_equiv
-
 lemma Term.apply_termModel (Γ : Ctxt) (t : Term) (σ : Subst) :
   let t_σ : TermModel Γ := ⟦t.apply σ⟧
   let t_θ : TermModel Γ := ⦃ t ⦄ (fun x => ⟦σ x⟧)
   t_σ = t_θ := by
-  simp; induction t <;> simp [eval, Term.apply]
+  simp; induction t <;> simp only [apply, eval]
   case _ => eq_refl
   case _ _ _ ih₁ ih₂ =>
     rw [← ih₁, ← ih₂]
     simp only [Model.app, Quotient.map₂_mk]
-
-#check Quotient.out
-#check Quotient.out_eq
 
 lemma Term.lift_apply (Γ : Ctxt) (t : Term) (θ : Valuation (TermModel Γ)) :
   let lift_θ : Subst := fun x => (θ x).out
@@ -308,14 +288,12 @@ lemma Term.lift_apply (Γ : Ctxt) (t : Term) (θ : Valuation (TermModel Γ)) :
   simp; rw [Term.apply_termModel]; congr
   funext; simp
 
-#print TermModel
-
 theorem completeness (Γ : Ctxt) (E : FormalEq) : Γ ⊧ E → Γ ⊢ E := by
   intros models
   have h : (∀ E ∈ Γ, ∀ (θ : Valuation (TermModel Γ)), ⦃E.lhs⦄ θ = ⦃E.rhs⦄ θ) := by
     intros E mem θ
-    rw [← Term.lift_apply]; rw [← Term.lift_apply, Quotient.eq_iff_equiv]
-    simp [HasEquiv.Equiv]
+    rw [← Term.lift_apply, ← Term.lift_apply, Quotient.eq_iff_equiv]
+    simp only [HasEquiv.Equiv]
     apply Derives.subst; apply Derives.ax; exact mem
   have models := models (TermModel Γ) h (fun x => ⟦var x⟧); simp at models
   rw [← Term.apply_termModel] at models
@@ -350,10 +328,6 @@ abbrev RTerm (_ℛ : Rules) := Term
 instance termRed : Red (RTerm ℛ) where
   reduces := Reduces ℛ
 
-#check termRed
--- set_option trace.Meta.synthInstance true
-#synth Red (RTerm ℛ)
-
 -- This is a little depressing: We can't just use `Term` here to get the notation.
 #check fun (t u : RTerm ℛ) => t ~> u
 
@@ -361,12 +335,6 @@ instance termRed : Red (RTerm ℛ) where
 
 -- Test lemma
 lemma Test.idRed (t : RTerm ℛ) : t ~>* t := by simp [Red.reduces]; grind
-
-#print Ctxt
-#print Rules
-#print Reduces
-
-#check Set.image
 
 def EToR (Γ : Ctxt) : Rules := (fun e => ⟨e.lhs, e.rhs⟩)'' Γ
 def RToE (ℛ : Rules) : Ctxt := (fun e => ⟨e.lhs, e.rhs⟩)'' ℛ
@@ -376,9 +344,9 @@ def RTerm.apply {ℛ : Rules} (t : RTerm ℛ) (σ : Subst) : RTerm ℛ := Term.a
 
 lemma Reduces.apply {ℛ : Rules} {t u : RTerm ℛ} (σ : Subst) (red : t ~> u)
  : t.apply σ ~> u.apply σ := by
-  simp [Red.reduces] at red; induction red <;> simp [apply]
+  simp only [Red.reduces] at red; induction red <;> simp only [RTerm.apply]
   case _ l r τ mem =>
-   rw [← Subst.scomp_apply]; rw [← Subst.scomp_apply]
+   rw [← Subst.scomp_apply, ← Subst.scomp_apply]
    exact Reduces.head (ℛ := ℛ) (l:=l) (r:=r) (σ := τ.scomp σ) mem
   case _ => apply Reduces.congrLeft; trivial
   case _ => apply Reduces.congrRight; trivial
@@ -478,10 +446,10 @@ lemma Reduces.refl_trans_sym_clos_congr {ℛ : Rules}
   . apply Reduces.refl_trans_sym_clos_congr_right; grind
 
 lemma derives_of_reduces (ℛ : Rules) (t u : RTerm ℛ) (red : t ~> u) : RToE ℛ ⊢ t ≅ u := by
-  simp [Red.reduces] at red; induction red
+  simp only [Red.reduces] at red; induction red
   case _ l r _ mem =>
     apply Derives.subst; constructor
-    simp [RToE]
+    simp only [RToE]
     exists ⟨l, r⟩
   case _ => apply Derives.congr <;> grind
   case _ => apply Derives.congr <;> grind
@@ -494,9 +462,6 @@ theorem derives_of_refl_trans_clos (ℛ : Rules) (t u : RTerm ℛ) (red : t ~>* 
       apply derives_of_reduces; grind
     grind
 
-#print Red
-#print Reduces
-
 theorem refl_trans_sym_clos_of_derives_aux (Γ : Ctxt) (eqProof : Γ ⊢ E) :
   refl_trans_sym_clos (Reduces (EToR Γ)) E.lhs E.rhs := by
   induction eqProof
@@ -504,7 +469,7 @@ theorem refl_trans_sym_clos_of_derives_aux (Γ : Ctxt) (eqProof : Γ ⊢ E) :
     apply refl_trans_sym_clos.base
     rw [← idSubst_apply (t:=t), ← idSubst_apply (t:=u)]
     apply Reduces.head
-    simp [EToR]; exists ⟨t, u⟩
+    simp only [EToR]; exists ⟨t, u⟩
   case _ => apply refl_trans_sym_clos.refl
   case _ _ _ _ ih =>
     apply refl_trans_sym_clos.inv; simp
@@ -520,7 +485,7 @@ theorem refl_trans_sym_clos_of_derives_aux (Γ : Ctxt) (eqProof : Γ ⊢ E) :
     trivial
 
 theorem refl_trans_sym_clos_of_derives (Γ : Ctxt) (t u : RTerm (EToR Γ)) (eqProof : Γ ⊢ t ≅ u) : t <~>* u := by
-  simp [Red.reduces]
+  simp only [refl_trans_sym_clos_red, Red.reduces]
   apply refl_trans_sym_clos_of_derives_aux (E := ⟨t, u⟩); grind
 
 end Rewriting
